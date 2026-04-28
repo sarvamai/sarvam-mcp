@@ -29,19 +29,19 @@ Drop this JSON into your MCP client (same shape works in Cursor / Claude Desktop
 }
 ```
 
-**No API key required up front.** The server starts with auth deferred and **prompts you for the key on the first tool call** via MCP elicitation (Cursor / Claude Desktop will show a popup). The key gets saved to `~/.sarvam/credentials` (mode `0600`) so subsequent runs don't ask.
+**No API key required up front.** The server starts with auth deferred and **prompts you for the key on the first tool call** via MCP elicitation (Cursor / Claude Desktop will show a popup). The message links to [Key management](https://dashboard.sarvam.ai/key-management) — open it, copy an API key, and paste. The key gets saved to `~/.sarvam/credentials` (mode `0600`) so subsequent runs don't ask.
 
-If your MCP client doesn't support elicitation, or you'd rather set the key ahead of time:
+If your MCP client doesn't support elicitation, or you'd rather set the key ahead of time (easiest first):
 
 ```bash
-# A) Interactive terminal setup (recommended for headless / scripted installs)
+# A) Env var in the MCP client config (no terminal in many IDEs) — add next to
+#    "args" for the sarvam server:  "env": { "SARVAM_API_KEY": "sk_..." }
+
+# B) Interactive setup (headless / when you prefer the terminal)
 sarvam-mcp init
 
-# B) Env var in the client config
-#    {"env": {"SARVAM_API_KEY": "sk_..."}}
-
-# C) Hand-write the credentials file
-mkdir -p ~/.sarvam && echo "api_key = sk_..." > ~/.sarvam/credentials
+# C) Advanced: create ~/.sarvam/credentials yourself (avoid echoing a real key in shell history)
+mkdir -p ~/.sarvam && printf 'api_key = sk_...\n' > ~/.sarvam/credentials && chmod 600 ~/.sarvam/credentials
 ```
 
 ### Per-client paths

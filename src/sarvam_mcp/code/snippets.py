@@ -51,7 +51,7 @@ def register(mcp: FastMCP) -> None:
             "code": snippet,
             "note": (
                 "Set SARVAM_API_KEY in your environment before running. "
-                "Get one at https://dashboard.sarvam.ai → API Keys."
+                "Get one at https://dashboard.sarvam.ai/key-management"
             ),
         }
 

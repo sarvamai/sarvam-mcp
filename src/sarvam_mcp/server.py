@@ -124,7 +124,7 @@ def _run_init() -> None:
     creds_path = Path("~/.sarvam/credentials").expanduser()
     print("\nSarvam MCP — first-time setup")
     print("─" * 40)
-    print("Get your API key at: https://dashboard.sarvam.ai\n")
+    print("Get your API key at: https://dashboard.sarvam.ai/key-management\n")
     if creds_path.exists():
         print(f"⚠  {creds_path} already exists. Overwrite? [y/N] ", end="", flush=True)
         if input().strip().lower() not in ("y", "yes"):

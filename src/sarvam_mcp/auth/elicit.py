@@ -6,7 +6,7 @@ and the first tool call asks the client to elicit one. Once supplied, the key
 is persisted to ``~/.sarvam/credentials`` and reused on subsequent runs.
 
 Falls back gracefully on clients that don't support elicitation: raises a
-clean ``RuntimeError`` with copy-pasteable setup instructions.
+clean ``ToolError`` with copy-pasteable setup instructions.
 """
 
 from __future__ import annotations
@@ -23,12 +23,22 @@ from sarvam_mcp.auth.context import _current, set_auth
 
 logger = logging.getLogger("sarvam_mcp.auth")
 
-CREDENTIALS_PATH = Path("~/.sarvam/credentials").expanduser()
+# Direct link to create / copy API keys (use everywhere we send users to the dashboard).
+DASHBOARD_KEY_MANAGEMENT_URL = "https://dashboard.sarvam.ai/key-management"
+
+# User-facing path (tilde) for messages; use CREDENTIALS_PATH for actual I/O.
+_CREDENTIALS_TILDE = "~/.sarvam/credentials"
+CREDENTIALS_PATH = Path(_CREDENTIALS_TILDE).expanduser()
 SETUP_HELP = (
-    "Sarvam API key required. Provide it one of these ways:\n"
-    "  1. Set SARVAM_API_KEY in your MCP client's env block, OR\n"
-    "  2. Run `sarvam-mcp init` once in a terminal, OR\n"
-    "  3. Write `api_key = sk_...` into ~/.sarvam/credentials"
+    "Sarvam API key required. Create or copy one at:\n"
+    f"  {DASHBOARD_KEY_MANAGEMENT_URL}\n"
+    "Then set it up (easiest first):\n"
+    "  1. In your MCP client config, set env: {\"SARVAM_API_KEY\": \"sk_...\"} "
+    "(many IDEs have a form for this — no terminal needed)\n"
+    "  2. Or run `sarvam-mcp init` once in a terminal (interactive; writes "
+    f"{_CREDENTIALS_TILDE} with safe permissions)\n"
+    "  3. Advanced: write `api_key = sk_...` into "
+    f"{_CREDENTIALS_TILDE} (mode 0600); avoid `echo` with a real key in your shell history"
 )
 
 
@@ -53,9 +63,9 @@ async def ensure_auth(ctx: Context) -> None:
         result = await ctx.elicit(
             message=(
                 "Sarvam needs an API key to make this call. "
-                "Get one at https://dashboard.sarvam.ai → API Keys, then "
-                "paste it here. It'll be saved to ~/.sarvam/credentials so "
-                "you won't be asked again."
+                f"Open {DASHBOARD_KEY_MANAGEMENT_URL} (click the link if your app "
+                "opens it), copy your API key, and paste it here. It will be "
+                f"saved to {_CREDENTIALS_TILDE} so you will not be asked again."
             ),
             response_type=str,
             response_title="Sarvam API Key",
@@ -80,7 +90,7 @@ async def ensure_auth(ctx: Context) -> None:
     set_auth(StaticKeyProvider(api_key))
     _persist_to_credentials(api_key)
     await ctx.info(
-        f"Sarvam API key saved to {CREDENTIALS_PATH}. Future tool calls will "
+        f"Sarvam API key saved to {_CREDENTIALS_TILDE}. Future tool calls will "
         "use it automatically."
     )
 

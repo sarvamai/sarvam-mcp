@@ -21,6 +21,10 @@ htmlcov/
 .vscode/
 .DS_Store
 *.swp
+.specstory/
+
+# uv (local lock from `uv sync`; distribution uses hatch/pip)
+uv.lock
 
 # Sarvam MCP local artifacts
 .sarvam-mcp-out/

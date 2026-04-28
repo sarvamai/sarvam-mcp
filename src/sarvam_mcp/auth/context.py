@@ -24,7 +24,8 @@ def current_auth() -> StaticKeyProvider:
     provider = _current.get()
     if provider is None:
         raise RuntimeError(
-            "No auth provider configured. Set SARVAM_API_KEY or write "
-            "~/.sarvam/credentials before starting the MCP server."
+            "No auth provider configured. Set SARVAM_API_KEY, run `sarvam-mcp init`, "
+            "or add ~/.sarvam/credentials before starting the MCP server. API keys: "
+            "https://dashboard.sarvam.ai/key-management"
         )
     return provider
