@@ -77,10 +77,9 @@ def test_validate_tts_v3_with_v3_speaker_passes():
     assert not [i for i in issues if i["severity"] == "error"]
 
 
-def test_validate_stt_rejects_nonexistent_saarika_v3():
-    issues = _validate("/speech-to-text", {"model": "saarika:v3"})
-    model_errors = [i for i in issues if i["field"] == "model"]
-    assert model_errors
+def test_validate_stt_rejects_invalid_stt_model():
+    issues = _validate("/speech-to-text", {"model": "stt-legacy-99"})
+    assert [i for i in issues if i["field"] == "model"]
     assert any("saaras:v3" in (i.get("fix", "") + i.get("message", "")) for i in issues)
 
 
@@ -113,7 +112,7 @@ def test_validate_clean_request_returns_no_errors():
     issues = _validate(
         "/v1/chat/completions",
         {
-            "model": "sarvam-m",
+            "model": "sarvam-30b",
             "messages": [{"role": "user", "content": "hi"}],
             "temperature": 0.5,
         },

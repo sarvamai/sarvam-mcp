@@ -24,7 +24,7 @@ async def main():
     text = (
         "Sarvam AI is an Indian generative AI company founded in 2023, "
         "headquartered in Bangalore. The company builds Indic-language models "
-        "including the Saarika ASR family, Bulbul TTS, and the Sarvam-M LLM."
+        "including STT, TTS, and LLM capabilities for Indic languages."
     )
     questions = [
         {"id": "q1", "text": "When was Sarvam AI founded?", "type": "short answer"},

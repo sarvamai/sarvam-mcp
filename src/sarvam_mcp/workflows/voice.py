@@ -1,6 +1,6 @@
 """``sv_voice`` — full voice loop in a single tool call.
 
-Audio in → STT → Sarvam-M reply → TTS audio out. Effectively a turnkey
+Audio in → STT → LLM reply → TTS audio out. Effectively a turnkey
 voice agent reachable from any MCP client.
 """
 
@@ -32,8 +32,8 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
             "End-to-end voice agent loop: transcribe an Indic audio file, "
-            "send the transcript to Sarvam-M for a reply, then synthesize "
-            "the reply back into audio with Bulbul v3.\n\n"
+            "send the transcript to the Indic-tuned LLM for a reply, then "
+            "synthesize the reply to audio.\n\n"
             "Returns: transcript, reply text, output audio file path. "
             "Default reply language follows the detected input language; "
             "set `reply_language` to force a specific output."
@@ -51,7 +51,7 @@ def register(mcp: FastMCP) -> None:
         ),
         input_language: LanguageCode = Field(
             default="unknown",
-            description="STT hint. 'unknown' lets Saarika auto-detect.",
+            description="STT hint. 'unknown' enables language auto-detect.",
         ),
         reply_language: TtsLanguageCode | None = Field(
             default=None,
@@ -78,7 +78,7 @@ def register(mcp: FastMCP) -> None:
 
             target_tts_lang = reply_language or _coerce_tts_language(detected_lang)
 
-            await ctx.info("Generating reply with Sarvam-M…")
+            await ctx.info("Generating LLM reply…")
             reply_text = await llm_complete(
                 sc,
                 [
@@ -115,7 +115,7 @@ def register(mcp: FastMCP) -> None:
 
 # ----- helpers -------------------------------------------------------------
 
-# Bulbul v3 covers these 11 languages. Anything else falls back to hi-IN.
+# TTS covers these 11 languages. Anything else falls back to hi-IN.
 _TTS_SUPPORTED = {
     "en-IN", "hi-IN", "bn-IN", "ta-IN", "te-IN", "gu-IN",
     "kn-IN", "ml-IN", "mr-IN", "pa-IN", "od-IN",

@@ -170,7 +170,7 @@ def _recommend(task: str) -> dict[str, Any]:
         return _result(
             model="bulbul:v3",
             endpoint="/text-to-speech",
-            why="Indic text → speech. Bulbul v3 is the latest with 38 voices.",
+            why="Indic text → speech. Current TTS stack with 38 voices on v3.",
             language_code=detected_lang or "hi-IN",
             snippet_key=("tts", "python"),
             extras={
@@ -288,10 +288,10 @@ def _result(
 
 # ---- request validation ---------------------------------------------------
 
-_VALID_TTS_MODELS = {"bulbul:v3", "bulbul:v3-beta", "bulbul:v2"}
-_VALID_LLM_MODELS = {"sarvam-m", "sarvam-30b", "sarvam-105b"}
+_VALID_TTS_MODELS = {"bulbul:v3", "bulbul:v3-beta"}
+_VALID_LLM_MODELS = {"sarvam-30b", "sarvam-105b"}
 _VALID_TRANSLATE_MODELS = {"mayura:v1", "sarvam-translate:v1"}
-_VALID_STT_MODELS = {"saaras:v3", "saarika:v2.5"}
+_VALID_STT_MODELS = {"saaras:v3"}
 _VALID_STT_MODES = {"transcribe", "translate", "verbatim", "translit", "codemix"}
 _VALID_SAARAS_MODELS = {"saaras:v3", "saaras:v3-realtime", "saaras:v2.5"}
 _VALID_LANGUAGE_CODES = {lang["code"] for lang in _data.ALL_LANGUAGES} | {"unknown"}
@@ -318,7 +318,7 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
             issues.append(_err(
                 "target_language_code",
                 f"'{body['target_language_code']}' not supported by TTS.",
-                "Bulbul covers 11 codes; call sarvam_code_languages('tts').",
+                "TTS covers 11 codes; call sarvam_code_languages('tts').",
             ))
         model = body.get("model", "bulbul:v3")
         if model not in _VALID_TTS_MODELS:
@@ -342,14 +342,11 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
         model = body.get("model", "saaras:v3")
         if model not in _VALID_STT_MODELS:
             issues.append(_err("model", f"'{model}' invalid for STT.",
-                               "Use 'saaras:v3' (recommended) or 'saarika:v2.5' (legacy)."))
+                               "Use 'saaras:v3'."))
         mode = body.get("mode")
         if mode and mode not in _VALID_STT_MODES:
             issues.append(_err("mode", f"'{mode}' invalid.",
                                f"Valid modes: {sorted(_VALID_STT_MODES)}"))
-        if mode and model == "saarika:v2.5":
-            issues.append(_warn("mode", "mode parameter is only supported by saaras:v3.",
-                                "Switch to model='saaras:v3' to use mode."))
         lc = body.get("language_code", "unknown")
         if lc not in _VALID_LANGUAGE_CODES:
             issues.append(_err("language_code", f"Unknown code '{lc}'."))
@@ -379,7 +376,7 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
     elif endpoint == "/v1/chat/completions":
         if not body.get("messages"):
             issues.append(_err("messages", "Required."))
-        model = body.get("model", "sarvam-m")
+        model = body.get("model", "sarvam-30b")
         if model not in _VALID_LLM_MODELS:
             issues.append(_err("model", f"'{model}' invalid.",
                                f"Valid: {sorted(_VALID_LLM_MODELS)}"))

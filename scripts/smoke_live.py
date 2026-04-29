@@ -219,7 +219,7 @@ async def main() -> None:
                 "text": (
                     "Sarvam AI is an Indian generative AI company founded in "
                     "2023, headquartered in Bangalore. It builds Indic-language "
-                    "models including Saarika, Bulbul, and Sarvam-M."
+                    "STT, TTS, and LLM products for Indian languages."
                 ),
                 "questions": json.dumps(
                     [
@@ -246,14 +246,14 @@ async def main() -> None:
     else:
         results.append(Result(name=name, ok=False, latency_ms=ms, error="see traceback"))
 
-    # ── 6. LLM (Sarvam-M) ───────────────────────────────────────────────
+    # ── 6. LLM ─────────────────────────────────────────────────────────
     name = "sarvam_llm_complete"
     payload, ms = await run_one(
         name,
         client.post_json(
             "/v1/chat/completions",
             json_body={
-                "model": "sarvam-m",
+                "model": "sarvam-30b",
                 "messages": [
                     {"role": "system", "content": "You are a concise Indic-language expert."},
                     {"role": "user", "content": "Translate 'good morning' into Tamil and Marathi."},
@@ -280,7 +280,7 @@ async def main() -> None:
     else:
         results.append(Result(name=name, ok=False, latency_ms=ms, error="see traceback"))
 
-    # ── 7. TTS (Bulbul v3) ──────────────────────────────────────────────
+    # ── 7. TTS (bulbul:v3) ───────────────────────────────────────────────
     name = "sarvam_tts_speak"
     payload, ms = await run_one(
         name,
@@ -325,9 +325,10 @@ async def main() -> None:
         wav_path = AUDIO_DIR / "tts_speak.wav"
         files = {"file": (wav_path.name, wav_path.read_bytes(), "audio/wav")}
         data = {
-            "model": "saarika:v2.5",
+            "model": "saaras:v3",
             "language_code": "hi-IN",
             "with_timestamps": "false",
+            "mode": "transcribe",
         }
         payload, ms = await run_one(
             name,
@@ -392,7 +393,7 @@ async def main() -> None:
         name,
         client.post_json(
             "/speech-to-text/job/init",
-            json_body={"model": "saarika:v2.5", "with_timestamps": False},
+            json_body={"model": "saaras:v3", "with_timestamps": False},
         ),
     )
     if payload is not None:

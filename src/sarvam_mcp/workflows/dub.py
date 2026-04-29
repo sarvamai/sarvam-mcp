@@ -33,7 +33,7 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
             "Dub an Indic audio file into another Indic language. Pipeline: "
-            "Saarika STT → Mayura/Sarvam-Translate → Bulbul TTS. Returns the "
+            "STT → Mayura or Sarvam-Translate → TTS. Returns the "
             "original transcript, translated transcript, and a path to the "
             "newly-dubbed WAV file."
         ),
@@ -46,7 +46,7 @@ def register(mcp: FastMCP) -> None:
         ),
         source_language_code: LanguageCode = Field(
             default="unknown",
-            description="STT language hint. 'unknown' lets Saarika auto-detect.",
+            description="STT language hint. 'unknown' enables auto-detect.",
         ),
         speaker: BulbulSpeaker = Field(default="priya"),
         translate_model: str = Field(

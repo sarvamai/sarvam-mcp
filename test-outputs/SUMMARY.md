@@ -15,9 +15,9 @@
 | `sarvam_translate` (Mayura) | ✅ | EN → HI colloquial mode |
 | `sarvam_translate` (Sarvam-Translate v1) | ✅ | EN → TA, 22-language model |
 | `sarvam_transliterate` | ✅ | `नमस्ते दुनिया` → `Namaste duniya` |
-| `sarvam_llm_complete` | ✅ | Sarvam-M chat, 150 completion tokens |
-| `sarvam_tts_speak` | ✅ | Bulbul v3, 75 KB WAV produced |
-| `sarvam_stt_transcribe` | ✅ | Saarika v2.5, accurate Hindi transcript |
+| `sarvam_llm_complete` | ✅ | `sarvam-30b` chat, 150 completion tokens |
+| `sarvam_tts_speak` | ✅ | `bulbul:v3`, 75 KB WAV produced |
+| `sarvam_stt_transcribe` | ✅ | `saaras:v3`, accurate Hindi transcript |
 | `sarvam_stt_translate` | ✅ | Saaras v2.5, audio → English |
 | `sarvam_stt_batch_submit` | ✅ | Returns Azure SAS upload + output URLs |
 | `sarvam_text_analytics` | ⚠️ | Request shape **solved**; server returns 5xx (transient backend issue, not our code) |
@@ -40,7 +40,7 @@ test-outputs/
 │   ├── sarvam_stt_translate.json
 │   └── sarvam_stt_batch_submit.json
 ├── audio/
-│   └── tts_speak.wav      # Hindi Bulbul output (the round-trip seed)
+│   └── tts_speak.wav      # Hindi TTS output (the round-trip seed)
 └── documents/
     └── hello.png          # synthesized text image used for vision probing
 ```
@@ -79,19 +79,19 @@ Latency: ~210–350 ms.
 ```
 Latency: ~220–320 ms.
 
-### 5. Chat Completions — `POST /v1/chat/completions` (Sarvam-M)
+### 5. Chat Completions — `POST /v1/chat/completions` (sarvam-30b)
 **Input**: 2-message conversation asking for "good morning" in Tamil + Marathi.
 **Output snippet**:
 > Tamil: காலை வணக்கம் (Kaalai vaṇakkam) … Marathi: शुभ सकाळ (Shubh sakāl)
 Latency: ~1.1–1.2 s. Returned reasoning trace in `<think>` blocks.
 
-### 6. Text-to-Speech — `POST /text-to-speech` (Bulbul v3)
-**Input**: `Hello, आज आप कैसे हैं?` · speaker `anushka` · 24kHz · `bulbul:v2`
+### 6. Text-to-Speech — `POST /text-to-speech` (bulbul:v3)
+**Input**: `Hello, आज आप कैसे हैं?` · speaker `priya` · 24kHz · `bulbul:v3`
 **Output**: 75,278-byte WAV → `test-outputs/audio/tts_speak.wav`
 Latency: ~570–870 ms.
 
-### 7. Speech-to-Text — `POST /speech-to-text` (Saarika)
-**Input**: the WAV from step 6 · `language_code=hi-IN` · `model=saarika:v2.5`
+### 7. Speech-to-Text — `POST /speech-to-text` (saaras:v3)
+**Input**: the WAV from step 6 · `language_code=hi-IN` · `model=saaras:v3` · `mode=transcribe`
 **Output**:
 ```json
 { "transcript": "हेलो, आज आप कैसे हैं?", "language_code": "hi-IN" }
@@ -164,10 +164,10 @@ All returned `404 Not Found`. Also tried `parse.sarvam.ai` (TLS handshake error 
 | Tool | Median latency |
 |---|---|
 | Translate (both models), Transliterate, LID | ~200–350 ms |
-| TTS Bulbul | ~570–870 ms |
-| STT Saarika | ~340–420 ms |
+| TTS | ~570–870 ms |
+| STT (saaras:v3) | ~340–420 ms |
 | STT-Translate Saaras | ~275–365 ms |
-| Sarvam-M (150 tokens) | ~1.1 s |
+| LLM (150 tokens) | ~1.1 s |
 | Batch STT init | ~305 ms |
 
 All within reasonable bounds for an interactive MCP experience.
@@ -184,8 +184,10 @@ All 35 unit tests still pass (`.venv/bin/pytest -q`).
 
 ## Reproduce
 
+The published package is `pip install sarvam-mcp` — you do not need a git clone to **use** the MCP server. The commands below are for **developers** running the live smoke script from a checkout of this repo:
+
 ```bash
-cd ~/play/work/sarvam-mcp
+cd /path/to/sarvam-mcp   # your local clone
 source .venv/bin/activate
 SARVAM_API_KEY=sk_... python scripts/smoke_live.py
 # Outputs land in test-outputs/{json,audio,documents}/.
@@ -200,5 +202,4 @@ The runner is idempotent and cheap (one call per endpoint, ~5 s total).
 | 🔴 high | Confirm Sarvam Vision endpoint path / host (probably needs a 30-second look at internal docs or dashboard). |
 | 🟡 med | Re-run `text-analytics` — backend 5xx should resolve; if not, file with platform team using one of the captured request_ids. |
 | 🟡 med | Add a `sarvam_stt_batch_upload` helper that accepts a local file path and uploads to the SAS URL returned by `batch_submit`. Closes the batch UX loop. |
-| 🟢 low | Promote `bulbul:v2` → `bulbul:v3` once exposed in this account's API. |
-| 🟢 low | Verify `saarika:v3` is callable on this key (we used `:v2.5` — both worked, but v3 is the documented latest). |
+| 🟢 low | Periodically re-verify default models against live API / docs. |

@@ -1,7 +1,7 @@
 """Tested code snippets for the most-used Sarvam APIs.
 
 Each entry is verified against api.sarvam.ai with current models as of
-2026-04-27. Update when model defaults shift (saarika v3, bulbul v4, etc).
+2026-04-27. Update when model defaults shift.
 
 Format: ``SNIPPETS[(api, language)] = code_string``
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 # fmt: off
 
 PY_TTS = '''\
-"""Generate Indic speech via Bulbul v3."""
+"""Generate Indic speech via the current TTS API (bulbul:v3)."""
 import base64, os, httpx
 
 API_KEY = os.environ["SARVAM_API_KEY"]
@@ -38,7 +38,7 @@ print(f"wrote {len(wav_bytes)} bytes — request_id={data.get('request_id')}")
 '''
 
 JS_TTS = '''\
-// Generate Indic speech via Bulbul v3.
+// Generate Indic speech (bulbul:v3).
 import { writeFileSync } from "node:fs";
 
 const API_KEY = process.env.SARVAM_API_KEY;
@@ -65,7 +65,7 @@ console.log(`wrote ${wav.length} bytes — request_id=${data.request_id}`);
 '''
 
 CURL_TTS = '''\
-# Generate Hindi speech via Bulbul v3.
+# Generate Hindi speech (bulbul:v3).
 curl -sS https://api.sarvam.ai/text-to-speech \\
   -H "api-subscription-key: $SARVAM_API_KEY" \\
   -H "content-type: application/json" \\
@@ -80,14 +80,14 @@ curl -sS https://api.sarvam.ai/text-to-speech \\
 '''
 
 PY_STT = '''\
-"""Transcribe Indic audio via Saarika v2.5."""
+"""Transcribe Indic audio via Saaras v3."""
 import os, httpx
 
 API_KEY = os.environ["SARVAM_API_KEY"]
 
 with open("input.wav", "rb") as fh:
     files = {"file": ("input.wav", fh, "audio/wav")}
-    data  = {"model": "saarika:v2.5", "language_code": "hi-IN", "with_timestamps": "false"}
+    data  = {"model": "saaras:v3", "language_code": "hi-IN", "with_timestamps": "false"}
     resp = httpx.post(
         "https://api.sarvam.ai/speech-to-text",
         headers={"api-subscription-key": API_KEY},
@@ -100,7 +100,7 @@ print(resp.json()["transcript"])
 '''
 
 JS_STT = '''\
-// Transcribe Indic audio via Saarika v2.5.
+// Transcribe Indic audio via Saaras v3.
 import { readFileSync } from "node:fs";
 
 const API_KEY = process.env.SARVAM_API_KEY;
@@ -108,7 +108,7 @@ const wav = readFileSync("input.wav");
 
 const form = new FormData();
 form.set("file", new Blob([wav], { type: "audio/wav" }), "input.wav");
-form.set("model", "saarika:v2.5");
+form.set("model", "saaras:v3");
 form.set("language_code", "hi-IN");
 form.set("with_timestamps", "false");
 
@@ -126,7 +126,7 @@ CURL_STT = '''\
 curl -sS https://api.sarvam.ai/speech-to-text \\
   -H "api-subscription-key: $SARVAM_API_KEY" \\
   -F "file=@input.wav;type=audio/wav" \\
-  -F "model=saarika:v2.5" \\
+  -F "model=saaras:v3" \\
   -F "language_code=hi-IN" \\
   -F "with_timestamps=false" \\
   | jq .transcript
@@ -191,7 +191,7 @@ curl -sS https://api.sarvam.ai/translate \\
 '''
 
 PY_LLM = '''\
-"""Chat with Sarvam-M (OpenAI-compatible)."""
+"""Chat with Sarvam LLMs (OpenAI-compatible)."""
 import os, httpx
 
 API_KEY = os.environ["SARVAM_API_KEY"]
@@ -200,7 +200,7 @@ resp = httpx.post(
     "https://api.sarvam.ai/v1/chat/completions",
     headers={"api-subscription-key": API_KEY},
     json={
-        "model": "sarvam-m",     # or sarvam-30b / sarvam-105b
+        "model": "sarvam-30b",
         "messages": [
             {"role": "system", "content": "You are a concise Indic-language assistant."},
             {"role": "user",   "content": "Translate 'good morning' into Tamil and Marathi."},
@@ -223,7 +223,7 @@ const resp = await fetch("https://api.sarvam.ai/v1/chat/completions", {
     "content-type": "application/json",
   },
   body: JSON.stringify({
-    model: "sarvam-m",
+    model: "sarvam-30b",
     messages: [
       { role: "system", content: "You are a concise Indic-language assistant." },
       { role: "user",   content: "Translate 'good morning' into Tamil and Marathi." },
@@ -241,7 +241,7 @@ curl -sS https://api.sarvam.ai/v1/chat/completions \\
   -H "api-subscription-key: $SARVAM_API_KEY" \\
   -H "content-type: application/json" \\
   -d '{
-    "model": "sarvam-m",
+    "model": "sarvam-30b",
     "messages": [
       {"role": "user", "content": "Translate good morning to Tamil"}
     ],

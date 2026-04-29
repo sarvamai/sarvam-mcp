@@ -4,7 +4,7 @@ Five tools exposed:
   - sarvam_code_search_docs    — full-text search across docs.sarvam.ai
   - sarvam_code_api_reference  — endpoint shapes (params, response, gotchas)
   - sarvam_code_languages      — supported language codes per API
-  - sarvam_code_speakers       — Bulbul speakers per model variant
+  - sarvam_code_speakers       — TTS speakers per model tag
   - sarvam_code_pricing        — current pricing structure
 
 Source-of-truth data lives in ``code/_data.py``; the search tool fetches
@@ -52,7 +52,7 @@ EndpointPath = Literal[
     "/doc-digitization/job/v1",
     "/text-to-speech/pronunciation-dictionary",
 ]
-TtsModel = Literal["bulbul:v3", "bulbul:v3-beta", "bulbul:v2"]
+TtsModel = Literal["bulbul:v3", "bulbul:v3-beta"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -136,10 +136,8 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_code_speakers",
         description=(
             "Build-time tool — helps write code that uses Sarvam. For runtime actions, use sarvam_tools_* instead.\n\n"
-            "List Bulbul TTS speakers compatible with a given model. v3 has "
-            "38 voices; v2 has 7 different ones. Speakers are NOT cross-"
-            "compatible — passing a v2 speaker to v3 will 400. Returns each "
-            "speaker with a brief tone hint where available."
+            "List TTS speakers compatible with a given model tag. The v3 roster "
+            "has 38 voices. Returns each speaker with a brief tone hint where available."
         ),
     )
     def sarvam_code_speakers(

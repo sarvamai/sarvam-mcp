@@ -1,4 +1,4 @@
-"""Get the full Bulbul v3 speaker list by triggering the validation error."""
+"""Get the full bulbul:v3 speaker list by triggering the validation error."""
 
 from __future__ import annotations
 

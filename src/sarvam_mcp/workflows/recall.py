@@ -1,7 +1,7 @@
 """``sv_recall`` — Q&A across a mixed collection of Indic docs + audio files.
 
 Index step is in-memory (per call): every audio file is transcribed, every
-text/markdown file is read, and the concatenation is fed to Sarvam-M as
+text/markdown file is read, and the concatenation is fed to the LLM as
 grounded context. For larger corpora this should be promoted to a real
 vector store; the v1 contract is intentionally tiny and stateless.
 """
@@ -32,9 +32,9 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
             "Answer a natural-language question grounded in a set of files. "
-            "Audio files are transcribed via Saarika; text/markdown files "
+            "Audio files are transcribed; text/markdown files "
             "are read directly. Everything is concatenated (capped at "
-            f"{MAX_CHARS} chars) and passed to Sarvam-M with a grounded-QA "
+            f"{MAX_CHARS} chars) and passed to the LLM with a grounded-QA "
             "system prompt. Useful for quickly querying meeting recordings, "
             "Indic-language notes, or mixed-format research folders."
         ),
@@ -104,7 +104,7 @@ def register(mcp: FastMCP) -> None:
                 running += len(snippet)
 
             await ctx.info(
-                f"Asking Sarvam-M with {running} chars from {len(chunks)} sources…"
+                f"Querying the LLM with {running} chars from {len(chunks)} sources…"
             )
             corpus = "\n".join(chunks) if chunks else "(no content available)"
             answer = await llm_complete(

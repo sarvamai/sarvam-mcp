@@ -1,4 +1,4 @@
-"""Sarvam-M chat completions — OpenAI-compatible."""
+"""Sarvam LLM chat completions — OpenAI-compatible."""
 
 from __future__ import annotations
 
@@ -13,9 +13,8 @@ from sarvam_mcp.tools._common import ready_ctx
 CHAT_PATH = "/v1/chat/completions"
 
 ChatRole = Literal["system", "user", "assistant"]
-# Live-tested 2026-04-27 — exhaustive list of accepted models on this endpoint.
-# sarvam-m is legacy (24B); prefer sarvam-30b or sarvam-105b.
-SarvamLLM = Literal["sarvam-30b", "sarvam-105b", "sarvam-m"]
+# Live-tested 2026-04-27 — models exposed by this tool (recommended defaults).
+SarvamLLM = Literal["sarvam-30b", "sarvam-105b"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -26,10 +25,9 @@ def register(mcp: FastMCP) -> None:
             "Generate chat completions with Sarvam's Indic-tuned LLMs.\n\n"
             "Models:\n"
             "  • `sarvam-30b` (default) — MoE, 2.4B active, balanced quality + cost\n"
-            "  • `sarvam-105b` — MoE flagship, best reasoning + tool use\n"
-            "  • `sarvam-m` — 24B, legacy (deprecated, migrate to sarvam-30b)\n\n"
-            "All three speak 23 Indic languages with native, romanized, and "
-            "code-mixed support. OpenAI-compatible message format."
+            "  • `sarvam-105b` — MoE flagship, best reasoning + tool use\n\n"
+            "Both support 23 Indic languages with native, romanized, and "
+            "code-mixed styles. OpenAI-compatible message format."
         ),
     )
     async def sarvam_llm_complete(
@@ -42,7 +40,7 @@ def register(mcp: FastMCP) -> None:
         ),
         model: SarvamLLM = Field(
             default="sarvam-30b",
-            description="`sarvam-30b` (default) | `sarvam-105b` (flagship) | `sarvam-m` (legacy).",
+            description="`sarvam-30b` (default) or `sarvam-105b` (flagship).",
         ),
         temperature: float = Field(default=0.7, ge=0.0, le=2.0),
         top_p: float = Field(default=1.0, ge=0.0, le=1.0),

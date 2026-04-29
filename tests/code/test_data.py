@@ -16,11 +16,7 @@ def test_tts_languages_subset_of_all():
     tts_codes = {lang["code"] for lang in _data.LANGUAGES_BY_API["tts"]}
     all_codes = {lang["code"] for lang in _data.ALL_LANGUAGES}
     assert tts_codes <= all_codes
-    assert len(tts_codes) == 11  # Bulbul covers 11 langs.
-
-
-def test_v3_speakers_disjoint_from_v2():
-    assert set(_data.V3_SPEAKERS).isdisjoint(set(_data.V2_SPEAKERS))
+    assert len(tts_codes) == 11  # TTS covers 11 langs.
 
 
 def test_v3_speakers_count_matches_live_api():
@@ -39,7 +35,7 @@ def test_pricing_table_covers_every_model_in_reference():
             for chunk in model_str.split(","):
                 # Pull bare model ids out of the human-readable list.
                 for word in chunk.split():
-                    if ":" in word or word in {"sarvam-m", "sarvam-30b", "sarvam-105b"}:
+                    if ":" in word or word in {"sarvam-30b", "sarvam-105b"}:
                         referenced_models.add(word.strip(",.()"))
     # Every referenced model must appear in PRICING.
     missing = referenced_models - _data.PRICING.keys()

@@ -44,7 +44,7 @@ LanguageCode = Literal[
     "unknown",  # Auto-detect
 ]
 
-# Subset that Bulbul v3 (TTS) supports. STT covers all 23 above.
+# Subset that the TTS API (bulbul:v3) supports. STT covers all 23 above.
 TtsLanguageCode = Literal[
     "en-IN",
     "hi-IN",
@@ -60,24 +60,18 @@ TtsLanguageCode = Literal[
 ]
 
 
-# ---- Bulbul speakers ------------------------------------------------------
+# ---- TTS speakers (bulbul:v3 / v3-beta roster) -----------------------------
 #
-# Live-tested 2026-04-27. Full speaker rosters per model variant.
-#
-# Bulbul v3 is the latest and is the default `model` everywhere; v2 speakers
-# are accepted by `bulbul:v2` only. We expose the union as a Literal so MCP
-# clients can autocomplete, and let the API do model-vs-speaker compatibility
-# checks at request time (with a helpful error if mismatched).
+# Live-tested 2026-04-27. Default model is bulbul:v3; speakers below match v3
+# and v3-beta. MCP exposes this Literal for autocomplete; the API still
+# validates model vs. speaker at request time.
 
 BulbulSpeaker = Literal[
-    # --- Bulbul v3 roster (38 speakers, the modern set) --------------------
     "aditya", "ritu", "ashutosh", "priya", "neha", "rahul", "pooja", "rohan",
     "simran", "kavya", "amit", "dev", "ishita", "shreya", "ratan", "varun",
     "manan", "sumit", "roopa", "kabir", "aayan", "shubh", "advait", "anand",
     "tanya", "tarun", "sunny", "mani", "gokul", "vijay", "shruti", "suhani",
     "mohit", "kavitha", "rehan", "soham", "rupali", "niharika",
-    # --- Bulbul v2-only legacy speakers ------------------------------------
-    "anushka", "abhilash", "manisha", "vidya", "arya", "karun", "hitesh",
 ]
 
 

@@ -10,11 +10,11 @@ Welcome to the Sarvam developer docs.
 
 ## Speech-to-Text
 
-Use `saarika:v2.5` to transcribe audio in 23 Indic languages.
+Use `saaras:v3` to transcribe audio in 23 Indic languages.
 
 ## Text-to-Speech
 
-Bulbul v3 is the latest TTS model with 38 speakers.
+TTS (bulbul:v3) is the current model with 38 speakers.
 
 ### Streaming TTS
 

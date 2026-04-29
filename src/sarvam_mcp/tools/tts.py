@@ -17,7 +17,7 @@ TTS_PATH = "/text-to-speech"
 TTS_STREAM_PATH = "/text-to-speech/stream"  # documented WebSocket path
 
 SampleRate = Literal[8000, 16000, 22050, 24000, 32000, 44100, 48000]
-TtsModel = Literal["bulbul:v3", "bulbul:v3-beta", "bulbul:v2"]
+TtsModel = Literal["bulbul:v3", "bulbul:v3-beta"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -25,15 +25,13 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_tts_speak",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Generate speech from text using Bulbul v3 (latest). 11 Indic languages.\n\n"
-            "Speaker hints (all Bulbul v3 voices):\n"
+            "Generate speech from text (model bulbul:v3). 11 Indic languages.\n\n"
+            "Speaker hints (v3 voice roster):\n"
             "  • `priya` / `neha` / `pooja` — warm friendly female (default `priya`)\n"
             "  • `aditya` / `rahul` / `kabir` — professional male\n"
             "  • `shreya` / `kavya` / `ritu` — calm news-anchor female\n"
             "  • `vijay` / `gokul` / `anand` — mature authoritative male\n"
             "  • `tanya` / `suhani` / `niharika` — young energetic female\n\n"
-            "Falling back to `bulbul:v2`? The legacy speakers (anushka, abhilash, "
-            "manisha, vidya, arya, karun, hitesh) only work with the v2 model.\n\n"
             "The audio file is written under SARVAM_MCP_BASE_PATH (default ~/Desktop)."
         ),
     )
@@ -41,15 +39,11 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         text: str = Field(description="The text to synthesize. Up to ~500 chars per call."),
         target_language_code: TtsLanguageCode = Field(
-            description="Output language. Bulbul supports 11 Indic languages.",
+            description="Output language. TTS supports 11 Indic languages.",
         ),
         speaker: BulbulSpeaker = Field(
             default="priya",
-            description=(
-                "Voice. Default `priya` is a Bulbul v3 speaker. If you set "
-                "model=bulbul:v2, use a v2 speaker (anushka, abhilash, "
-                "manisha, vidya, arya, karun, hitesh)."
-            ),
+            description="Voice. Default `priya` — use `sarvam_code_speakers` for the full v3 list.",
         ),
         speech_sample_rate: SampleRate = Field(
             default=24000, description="PCM sample rate of the output WAV."
@@ -63,10 +57,7 @@ def register(mcp: FastMCP) -> None:
         ),
         model: TtsModel = Field(
             default="bulbul:v3",
-            description=(
-                "`bulbul:v3` (latest), `bulbul:v3-beta`, or `bulbul:v2` "
-                "(legacy speakers only)."
-            ),
+            description="`bulbul:v3` (latest) or `bulbul:v3-beta`.",
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
@@ -112,7 +103,7 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_tts_stream",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Streaming variant of sarvam_tts_speak using Bulbul WebSocket. "
+            "Streaming variant of sarvam_tts_speak using the TTS WebSocket. "
             "Audio is streamed to disk in the background; the tool returns a "
             "sarvam:// resource URI immediately."
         ),

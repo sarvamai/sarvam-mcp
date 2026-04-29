@@ -17,7 +17,7 @@ from typing import Any
 
 # ---------------------------------------------------------------------------
 # Languages per API. STT covers all 22 scheduled Indian languages + English;
-# TTS (Bulbul) covers a smaller set. Translate matches based on model.
+# TTS covers a smaller set. Translate matches based on model.
 # ---------------------------------------------------------------------------
 
 ALL_LANGUAGES: list[dict[str, str]] = [
@@ -71,8 +71,7 @@ LANGUAGES_BY_API: dict[str, list[dict[str, str]]] = {
 
 
 # ---------------------------------------------------------------------------
-# Bulbul TTS speakers, partitioned by model variant.
-# v3 introduces 38 new voices; v2 had 7. They are NOT compatible across models.
+# TTS speakers, partitioned by model tag (v3 and v3-beta share the same roster).
 # ---------------------------------------------------------------------------
 
 V3_SPEAKERS = [
@@ -83,14 +82,9 @@ V3_SPEAKERS = [
     "mohit", "kavitha", "rehan", "soham", "rupali", "niharika",
 ]
 
-V2_SPEAKERS = [
-    "anushka", "abhilash", "manisha", "vidya", "arya", "karun", "hitesh",
-]
-
 SPEAKERS_BY_MODEL: dict[str, list[str]] = {
-    "bulbul:v3":       V3_SPEAKERS,
-    "bulbul:v3-beta":  V3_SPEAKERS,
-    "bulbul:v2":       V2_SPEAKERS,
+    "bulbul:v3":      V3_SPEAKERS,
+    "bulbul:v3-beta": V3_SPEAKERS,
 }
 
 # Curated tone hints for the most-used voices, so agents can pick sensibly.
@@ -110,14 +104,6 @@ SPEAKER_HINTS: dict[str, str] = {
     "tanya":    "young energetic female",
     "suhani":   "young energetic female",
     "niharika": "young energetic female",
-    # Bulbul v2 (legacy)
-    "anushka":  "(v2) warm female, news-anchor",
-    "abhilash": "(v2) warm male, news-anchor",
-    "manisha":  "(v2) friendly female, conversational",
-    "vidya":    "(v2) calm female, customer-support tone",
-    "arya":     "(v2) young female, energetic",
-    "karun":    "(v2) young male, casual",
-    "hitesh":   "(v2) mature male, authoritative",
 }
 
 
@@ -129,7 +115,7 @@ SPEAKER_HINTS: dict[str, str] = {
 API_REFERENCE: dict[str, dict[str, Any]] = {
     "/text-to-speech": {
         "method": "POST",
-        "model": "bulbul:v3 (latest), bulbul:v3-beta, bulbul:v2",
+        "model": "bulbul:v3 (latest), bulbul:v3-beta",
         "content_type": "application/json",
         "auth_header": "api-subscription-key",
         "request_body": {
@@ -147,16 +133,16 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "audios":     "list[str] — base64-encoded WAV per input",
             "request_id": "str",
         },
-        "notes": "v3 speakers are different from v2 — see sarvam_code_speakers.",
+        "notes": "Pick a speaker compatible with your model — see sarvam_code_speakers.",
     },
     "/speech-to-text": {
         "method": "POST",
-        "model": "saaras:v3 (recommended), saarika:v2.5 (legacy, deprecated soon)",
+        "model": "saaras:v3 (recommended)",
         "content_type": "multipart/form-data",
         "auth_header": "api-subscription-key",
         "request_body": {
             "file":              "binary, required — audio (wav, mp3, ogg, flac, m4a, webm, aac, opus, amr, wma)",
-            "model":             "str — saaras:v3 (recommended) or saarika:v2.5 (legacy)",
+            "model":             "str — saaras:v3",
             "mode":              "str — transcribe (default) | translate | verbatim | translit | codemix (saaras:v3 only)",
             "language_code":     "str — BCP-47 or 'unknown' for auto-detect",
             "with_timestamps":   "bool",
@@ -171,7 +157,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "notes": (
             "Saaras v3 is the recommended model. It supports 5 output modes via the `mode` parameter. "
-            "saarika:v2.5 is legacy and will be deprecated. >30s audio: use /speech-to-text/job/init."
+            "For >30s audio, use /speech-to-text/job/init."
         ),
     },
     "/speech-to-text-translate": {
@@ -192,7 +178,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
     },
     "/speech-to-text/job/init": {
         "method": "POST",
-        "model": "saaras:v3 (recommended), saarika:v2.5 (legacy)",
+        "model": "saaras:v3 (recommended)",
         "content_type": "application/json",
         "request_body": {
             "model":           "str",
@@ -266,10 +252,10 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
     },
     "/v1/chat/completions": {
         "method": "POST",
-        "model": "sarvam-30b (recommended), sarvam-105b (flagship), sarvam-m (legacy)",
+        "model": "sarvam-30b (recommended), sarvam-105b (flagship)",
         "content_type": "application/json",
         "request_body": {
-            "model":       "str — one of: sarvam-30b | sarvam-105b | sarvam-m (legacy)",
+            "model":       "str — one of: sarvam-30b | sarvam-105b",
             "messages":    "list[{role, content}]",
             "temperature": "float, 0.0 to 2.0",
             "top_p":       "float, 0.0 to 1.0",
@@ -277,7 +263,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "stream":      "bool",
         },
         "response_oai_compatible": True,
-        "notes": "OpenAI-compatible. sarvam-30b is the recommended default; sarvam-105b is flagship. sarvam-m is legacy.",
+        "notes": "OpenAI-compatible. sarvam-30b is the recommended default; sarvam-105b is flagship.",
     },
     "/doc-digitization/job/v1": {
         "method": "POST",
@@ -324,17 +310,14 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
 
 PRICING: dict[str, dict[str, Any]] = {
     "saaras:v3":            {"unit": "per minute of audio",   "tier": "billed by minute (recommended)"},
-    "saarika:v2.5":         {"unit": "per minute of audio",   "tier": "billed by minute (legacy, deprecated soon)"},
     "saaras:v3-realtime":   {"unit": "per minute of audio",   "tier": "billed by minute"},
     "saaras:v2.5":          {"unit": "per minute of audio",   "tier": "billed by minute (legacy, deprecated soon)"},
     "bulbul:v3":            {"unit": "per character",         "tier": "billed by character"},
     "bulbul:v3-beta":       {"unit": "per character",         "tier": "billed by character"},
-    "bulbul:v2":            {"unit": "per character",         "tier": "billed by character"},
     "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
     "sarvam-translate:v1":  {"unit": "per character",         "tier": "billed by character"},
     "sarvam-30b":           {"unit": "per 1M tokens",         "tier": "billed by tokens (recommended)"},
     "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship)"},
-    "sarvam-m":             {"unit": "per 1M tokens",         "tier": "billed by tokens (legacy, deprecated)"},
     "sarvam-vision":        {"unit": "per page",              "tier": "billed by page"},
 }
 

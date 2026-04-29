@@ -17,7 +17,7 @@ STT_TRANSLATE_PATH = "/speech-to-text-translate"
 STT_BATCH_PATH = "/speech-to-text/job/init"
 STT_BATCH_STATUS_PATH = "/speech-to-text/job/status"
 
-SttModel = Literal["saaras:v3", "saarika:v2.5"]
+SttModel = Literal["saaras:v3"]
 
 SttMode = Literal["transcribe", "translate", "verbatim", "translit", "codemix"]
 
@@ -41,8 +41,7 @@ def register(mcp: FastMCP) -> None:
             "  • `codemix` — English words in English, Indic words in native script\n\n"
             "The default `language_code='unknown'` auto-detects, but specifying the "
             "language (e.g. `hi-IN`, `ta-IN`) gives better accuracy.\n"
-            "For very long files (>30s), prefer `sarvam_stt_batch_submit`.\n\n"
-            "Legacy: `saarika:v2.5` is still accepted but is deprecated — use `saaras:v3`."
+            "For very long files (>30s), prefer `sarvam_stt_batch_submit`."
         ),
     )
     async def sarvam_stt_transcribe(
@@ -70,10 +69,7 @@ def register(mcp: FastMCP) -> None:
         ),
         model: SttModel = Field(
             default="saaras:v3",
-            description=(
-                "Saaras v3 is the latest recommended model. "
-                "saarika:v2.5 is legacy (deprecated soon)."
-            ),
+            description="Saaras v3 (recommended STT model for Indic audio).",
         ),
         input_audio_codec: InputAudioCodec | None = Field(
             default=None,

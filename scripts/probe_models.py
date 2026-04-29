@@ -33,8 +33,8 @@ async def main():
     set_auth(StaticKeyProvider(cfg.api_key))  # type: ignore[arg-type]
     c = SarvamClient(cfg.base_url, region=cfg.region)
 
-    print("\n=== TTS — Bulbul ===")
-    for v in ["bulbul:v3", "bulbul:v2", "bulbul:v1", "bulbul"]:
+    print("\n=== TTS (bulbul tags) ===")
+    for v in ["bulbul:v3", "bulbul:v3-beta"]:
         await probe(
             v,
             c.post_json(
@@ -42,22 +42,27 @@ async def main():
                 json_body={
                     "inputs": ["नमस्ते"],
                     "target_language_code": "hi-IN",
-                    "speaker": "anushka",
+                    "speaker": "priya",
                     "speech_sample_rate": 24000,
                     "model": v,
                 },
             ),
         )
 
-    print("\n=== STT transcribe — Saarika ===")
+    print("\n=== STT transcribe — saaras ===")
     if WAV.exists():
         wav = WAV.read_bytes()
-        for v in ["saarika:v3", "saarika:v2.5", "saarika:v2", "saarika:v1", "saarika:flash"]:
+        for v in ["saaras:v3"]:
             await probe(
                 v,
                 c.post_multipart(
                     "/speech-to-text",
-                    data={"model": v, "language_code": "hi-IN", "with_timestamps": "false"},
+                    data={
+                        "model": v,
+                        "language_code": "hi-IN",
+                        "with_timestamps": "false",
+                        "mode": "transcribe",
+                    },
                     files={"file": ("c.wav", wav, "audio/wav")},
                 ),
             )
@@ -110,8 +115,8 @@ async def main():
             ),
         )
 
-    print("\n=== LLM — Sarvam-M family ===")
-    for v in ["sarvam-m", "sarvam-105b", "sarvam-30b", "sarvam-2b"]:
+    print("\n=== LLM (chat) ===")
+    for v in ["sarvam-105b", "sarvam-30b", "sarvam-2b"]:
         await probe(
             v,
             c.post_json(

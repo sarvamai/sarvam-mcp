@@ -28,7 +28,7 @@ Use when the user is **building an app** that calls Sarvam APIs:
 
 - "How do I call the TTS endpoint from Python?"
 - "Which languages does STT support?"
-- "What speakers are available for Bulbul v3?"
+- "What TTS speakers are available for bulbul:v3?"
 - "What's the request shape for /translate?"
 
 These tools return documentation, code snippets, API reference, and project templates. They do NOT call the Sarvam API at runtime.
@@ -68,3 +68,5 @@ src/sarvam_mcp/
 - Every tool response includes an `observability` dict with latency, request IDs, and credit usage.
 - `_data.py` and `_snippets.py` are reference tables — update carefully.
 - Run `pytest -q` before committing.
+
+**Packaging note:** The MCP server is installed with `pip install sarvam-mcp` or `uvx sarvam-mcp`. User-facing help should not require a `git clone` of this repository; reserve clone + editable install for development and running tests.
