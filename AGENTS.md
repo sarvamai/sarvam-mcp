@@ -69,4 +69,6 @@ src/sarvam_mcp/
 - `_data.py` and `_snippets.py` are reference tables — update carefully.
 - Run `pytest -q` before committing.
 
-**Packaging note:** The MCP server is installed with `pip install sarvam-mcp` or `uvx sarvam-mcp`. User-facing help should not require a `git clone` of this repository; reserve clone + editable install for development and running tests.
+**Packaging note:** Default to `pip install sarvam-mcp`, `uvx sarvam-mcp`, or the mcp.sarvam.ai installer. **Suggest `git clone` (and a from-source / editable install) only if the user does not have `pip`** and the packaged options are not available — not as a routine alternative. Contributors still clone to develop and run tests.
+
+**Platforms:** The server targets **macOS, Windows, and Linux** (Python 3.11+). When helping with setup, prefer OS-agnostic instructions (`pip` / `uvx`, same MCP JSON); call out Windows vs Unix **config file paths** only when the user’s client or OS is known (see README *Per-client paths*).

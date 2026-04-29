@@ -184,7 +184,7 @@ All 35 unit tests still pass (`.venv/bin/pytest -q`).
 
 ## Reproduce
 
-The published package is `pip install sarvam-mcp` — you do not need a git clone to **use** the MCP server. The commands below are for **developers** running the live smoke script from a checkout of this repo:
+The published package is `pip install sarvam-mcp` (or `uvx` / the installer); **only suggest a git clone to users who do not have `pip`**. The commands below are for **developers** running the live smoke script from a checkout of this repo:
 
 ```bash
 cd /path/to/sarvam-mcp   # your local clone

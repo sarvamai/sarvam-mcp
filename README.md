@@ -2,9 +2,11 @@
 
 Official Sarvam MCP server. Exposes every public Sarvam API — STT, TTS, Translate, Transliterate, Language ID, Text Analytics, LLM (30B / 105B), Vision Document Intelligence, Pronunciation Dictionaries — as first-class MCP tools so any MCP-aware client (Claude Desktop, Claude Code, Cursor, Windsurf, Zed) can call Sarvam with zero boilerplate.
 
+It is a **cross-platform** Python package: use it on **macOS, Windows, and Linux** (and anywhere else **Python 3.11+** runs). The same `pip install`, `uvx`, and MCP config JSON work on all of them; only client config *file paths* differ by OS and app (see below).
+
 ## Quickstart
 
-The fastest way is the one-line installer at **[mcp.sarvam.ai](https://mcp.sarvam.ai)** — auto-detects your MCP clients and wires them up:
+The fastest way is the one-line installer at **[mcp.sarvam.ai](https://mcp.sarvam.ai)** — auto-detects your OS and MCP clients and wires them up. On **Windows**, prefer the installer or `pip install` / `uvx` if you do not use WSL; the `curl | bash` line below is for Unix-like shells (macOS, Linux, or WSL):
 
 ```bash
 curl -fsSL https://mcp.sarvam.ai/install | bash
@@ -16,7 +18,7 @@ Or install manually:
 pip install sarvam-mcp        # or:  uvx sarvam-mcp
 ```
 
-**You do not need to `git clone` this repository** to use the server — install from PyPI (above), or use the [installer](https://mcp.sarvam.ai) / `uvx`, and point your MCP client at the `sarvam-mcp` entry point.
+Prefer **PyPI** (`pip install` above), the **[installer](https://mcp.sarvam.ai)**, or **`uvx sarvam-mcp`**, then point your MCP client at the `sarvam-mcp` entry point. **Suggest `git clone` only as a last resort:** when someone **does not have `pip`** and also cannot use the installer or `uvx` — then they can clone this repo and run from source (see [Development](#development)). For everyone else, a clone is not required.
 
 After `pip install`, you can use the console script directly (handy if `uv` is not on your `PATH`):
 
@@ -46,7 +48,7 @@ With `uvx` (no prior install; downloads on first run), use:
 
 Use `sarvam-mcp` as the command when the package is installed with **pip**; use **`uvx sarvam-mcp`** when you want a one-shot run without a global install.
 
-**No API key required up front.** The server starts with auth deferred and **prompts you for the key on the first tool call** via MCP elicitation (Cursor / Claude Desktop will show a popup). The message links to [Key management](https://dashboard.sarvam.ai/key-management) — open it, copy an API key, and paste. The key gets saved to `~/.sarvam/credentials` (mode `0600`) so subsequent runs don't ask.
+**No API key required up front.** The server starts with auth deferred and **prompts you for the key on the first tool call** via MCP elicitation (Cursor / Claude Desktop will show a popup). The message links to [Key management](https://dashboard.sarvam.ai/key-management) — open it, copy an API key, and paste. The key gets saved under your user home (e.g. `~/.sarvam/credentials` on macOS/Linux, or the same path under your Windows user profile; mode `0600` on Unix) so subsequent runs don't ask.
 
 If your MCP client doesn't support elicitation, or you'd rather set the key ahead of time (easiest first):
 
@@ -63,9 +65,11 @@ mkdir -p ~/.sarvam && printf 'api_key = sk_...\n' > ~/.sarvam/credentials && chm
 
 ### Per-client paths
 
-- **Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json`
+MCP config **JSON** is the same on every OS; only where the file lives changes.
+
+- **Claude Desktop** — macOS: `~/Library/Application Support/Claude/claude_desktop_config.json` · Windows: `%APPDATA%\Claude\claude_desktop_config.json` · Linux: `~/.config/Claude/claude_desktop_config.json` (typical)
 - **Claude Code** — `claude mcp add sarvam -- uvx sarvam-mcp` (or `-- sarvam-mcp` if installed via `pip install sarvam-mcp` and on your `PATH`)
-- **Cursor** — `~/.cursor/mcp.json`
+- **Cursor** — macOS/Linux: `~/.cursor/mcp.json` · Windows: `%USERPROFILE%\.cursor\mcp.json`
 - **Windsurf** — Cascade settings → MCP servers
 - **Zed** — `settings.json` → `context_servers`
 
@@ -127,7 +131,7 @@ The **install website** at [mcp.sarvam.ai](https://mcp.sarvam.ai) lives in [`sar
 
 ## Development
 
-To change this package or run the full test suite, clone the repository from [GitHub](https://github.com/sarvamai/sarvam-mcp). For everyday use, **`pip install sarvam-mcp` is enough — a clone is not required** (see Quickstart above).
+To change this package or run the full test suite, clone the repository from [GitHub](https://github.com/sarvamai/sarvam-mcp). For everyday use, prefer **`pip install sarvam-mcp`** (see Quickstart); **suggest cloning to end users only when they do not have `pip`** and cannot use the installer or `uvx`.
 
 ```bash
 uv venv && source .venv/bin/activate
