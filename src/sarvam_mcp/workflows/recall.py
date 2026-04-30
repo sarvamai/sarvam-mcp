@@ -15,7 +15,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import LanguageCode, ready_ctx
+from sarvam_mcp.tools._common import LanguageCode, SarvamLLM, ready_ctx
 from sarvam_mcp.workflows._helpers import llm_complete, stt_transcribe
 
 AUDIO_EXTS = {".wav", ".mp3", ".ogg", ".flac", ".m4a", ".webm"}
@@ -53,7 +53,10 @@ def register(mcp: FastMCP) -> None:
             description="STT hint applied to every audio file.",
         ),
         max_files: int = Field(default=20, ge=1, le=100),
-        llm_model: str = Field(default="sarvam-30b"),
+        llm_model: SarvamLLM = Field(
+            default="sarvam-30b",
+            description="`sarvam-30b` (default) or `sarvam-105b` (flagship).",
+        ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         files = _gather_files(paths, max_files)

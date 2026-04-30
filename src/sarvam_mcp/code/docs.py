@@ -52,7 +52,7 @@ EndpointPath = Literal[
     "/doc-digitization/job/v1",
     "/text-to-speech/pronunciation-dictionary",
 ]
-TtsModel = Literal["bulbul:v3", "bulbul:v3-beta"]
+TtsModel = Literal["bulbul:v3"]
 
 
 def register(mcp: FastMCP) -> None:

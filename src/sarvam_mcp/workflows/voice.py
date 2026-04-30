@@ -16,6 +16,7 @@ from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import (
     BulbulSpeaker,
     LanguageCode,
+    SarvamLLM,
     TtsLanguageCode,
     ready_ctx,
 )
@@ -61,7 +62,10 @@ def register(mcp: FastMCP) -> None:
             ),
         ),
         speaker: BulbulSpeaker = Field(default="priya"),
-        llm_model: str = Field(default="sarvam-30b"),
+        llm_model: SarvamLLM = Field(
+            default="sarvam-30b",
+            description="`sarvam-30b` (default) or `sarvam-105b` (flagship).",
+        ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         path = Path(audio_path).expanduser()

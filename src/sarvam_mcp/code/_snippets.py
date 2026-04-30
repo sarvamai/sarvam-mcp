@@ -191,16 +191,21 @@ curl -sS https://api.sarvam.ai/translate \\
 '''
 
 PY_LLM = '''\
-"""Chat with Sarvam LLMs (OpenAI-compatible)."""
+"""Chat with Sarvam LLMs (OpenAI-compatible).
+
+Accepted model ids: sarvam-30b (balanced default), sarvam-105b (flagship).
+"""
 import os, httpx
 
 API_KEY = os.environ["SARVAM_API_KEY"]
+# sarvam-30b | sarvam-105b
+MODEL = "sarvam-30b"
 
 resp = httpx.post(
     "https://api.sarvam.ai/v1/chat/completions",
     headers={"api-subscription-key": API_KEY},
     json={
-        "model": "sarvam-30b",
+        "model": MODEL,
         "messages": [
             {"role": "system", "content": "You are a concise Indic-language assistant."},
             {"role": "user",   "content": "Translate 'good morning' into Tamil and Marathi."},
@@ -215,7 +220,9 @@ print(resp.json()["choices"][0]["message"]["content"])
 '''
 
 JS_LLM = '''\
+// Accepted model ids: sarvam-30b (balanced default), sarvam-105b (flagship).
 const API_KEY = process.env.SARVAM_API_KEY;
+const MODEL = "sarvam-30b";
 const resp = await fetch("https://api.sarvam.ai/v1/chat/completions", {
   method: "POST",
   headers: {
@@ -223,7 +230,7 @@ const resp = await fetch("https://api.sarvam.ai/v1/chat/completions", {
     "content-type": "application/json",
   },
   body: JSON.stringify({
-    model: "sarvam-30b",
+    model: MODEL,
     messages: [
       { role: "system", content: "You are a concise Indic-language assistant." },
       { role: "user",   content: "Translate 'good morning' into Tamil and Marathi." },
@@ -237,6 +244,8 @@ console.log(data.choices[0].message.content);
 '''
 
 CURL_LLM = '''\
+# Accepted model ids: sarvam-30b (balanced default), sarvam-105b (flagship).
+# Example below uses sarvam-30b; change the "model" field to sarvam-105b if needed.
 curl -sS https://api.sarvam.ai/v1/chat/completions \\
   -H "api-subscription-key: $SARVAM_API_KEY" \\
   -H "content-type: application/json" \\

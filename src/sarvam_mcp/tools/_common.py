@@ -60,11 +60,10 @@ TtsLanguageCode = Literal[
 ]
 
 
-# ---- TTS speakers (bulbul:v3 / v3-beta roster) -----------------------------
+# ---- TTS speakers (bulbul:v3 roster) --------------------------------------
 #
-# Live-tested 2026-04-27. Default model is bulbul:v3; speakers below match v3
-# and v3-beta. MCP exposes this Literal for autocomplete; the API still
-# validates model vs. speaker at request time.
+# Live-tested 2026-04-27. Default model is bulbul:v3. MCP exposes this Literal
+# for autocomplete; the API still validates model vs. speaker at request time.
 
 BulbulSpeaker = Literal[
     "aditya", "ritu", "ashutosh", "priya", "neha", "rahul", "pooja", "rohan",
@@ -73,6 +72,9 @@ BulbulSpeaker = Literal[
     "tanya", "tarun", "sunny", "mani", "gokul", "vijay", "shruti", "suhani",
     "mohit", "kavitha", "rehan", "soham", "rupali", "niharika",
 ]
+
+# Chat completions — same IDs as ``sarvam_tools_llm_complete``.
+SarvamLLM = Literal["sarvam-30b", "sarvam-105b"]
 
 
 # ---- Translate-mode + script enums ---------------------------------------

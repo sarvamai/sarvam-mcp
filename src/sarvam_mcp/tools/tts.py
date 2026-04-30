@@ -17,7 +17,7 @@ TTS_PATH = "/text-to-speech"
 TTS_STREAM_PATH = "/text-to-speech/stream"  # documented WebSocket path
 
 SampleRate = Literal[8000, 16000, 22050, 24000, 32000, 44100, 48000]
-TtsModel = Literal["bulbul:v3", "bulbul:v3-beta"]
+TtsModel = Literal["bulbul:v3"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -57,7 +57,7 @@ def register(mcp: FastMCP) -> None:
         ),
         model: TtsModel = Field(
             default="bulbul:v3",
-            description="`bulbul:v3` (latest) or `bulbul:v3-beta`.",
+            description="`bulbul:v3` (recommended TTS model).",
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)

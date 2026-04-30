@@ -288,7 +288,7 @@ def _result(
 
 # ---- request validation ---------------------------------------------------
 
-_VALID_TTS_MODELS = {"bulbul:v3", "bulbul:v3-beta"}
+_VALID_TTS_MODELS = {"bulbul:v3"}
 _VALID_LLM_MODELS = {"sarvam-30b", "sarvam-105b"}
 _VALID_TRANSLATE_MODELS = {"mayura:v1", "sarvam-translate:v1"}
 _VALID_STT_MODELS = {"saaras:v3"}

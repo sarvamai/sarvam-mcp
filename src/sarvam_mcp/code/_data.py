@@ -71,7 +71,7 @@ LANGUAGES_BY_API: dict[str, list[dict[str, str]]] = {
 
 
 # ---------------------------------------------------------------------------
-# TTS speakers, partitioned by model tag (v3 and v3-beta share the same roster).
+# TTS speakers for bulbul:v3.
 # ---------------------------------------------------------------------------
 
 V3_SPEAKERS = [
@@ -83,8 +83,7 @@ V3_SPEAKERS = [
 ]
 
 SPEAKERS_BY_MODEL: dict[str, list[str]] = {
-    "bulbul:v3":      V3_SPEAKERS,
-    "bulbul:v3-beta": V3_SPEAKERS,
+    "bulbul:v3": V3_SPEAKERS,
 }
 
 # Curated tone hints for the most-used voices, so agents can pick sensibly.
@@ -115,7 +114,7 @@ SPEAKER_HINTS: dict[str, str] = {
 API_REFERENCE: dict[str, dict[str, Any]] = {
     "/text-to-speech": {
         "method": "POST",
-        "model": "bulbul:v3 (latest), bulbul:v3-beta",
+        "model": "bulbul:v3 (latest)",
         "content_type": "application/json",
         "auth_header": "api-subscription-key",
         "request_body": {
@@ -313,7 +312,6 @@ PRICING: dict[str, dict[str, Any]] = {
     "saaras:v3-realtime":   {"unit": "per minute of audio",   "tier": "billed by minute"},
     "saaras:v2.5":          {"unit": "per minute of audio",   "tier": "billed by minute (legacy, deprecated soon)"},
     "bulbul:v3":            {"unit": "per character",         "tier": "billed by character"},
-    "bulbul:v3-beta":       {"unit": "per character",         "tier": "billed by character"},
     "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
     "sarvam-translate:v1":  {"unit": "per character",         "tier": "billed by character"},
     "sarvam-30b":           {"unit": "per 1M tokens",         "tier": "billed by tokens (recommended)"},

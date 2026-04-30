@@ -34,7 +34,7 @@ async def main():
     c = SarvamClient(cfg.base_url, region=cfg.region)
 
     print("\n=== TTS (bulbul tags) ===")
-    for v in ["bulbul:v3", "bulbul:v3-beta"]:
+    for v in ["bulbul:v3"]:
         await probe(
             v,
             c.post_json(

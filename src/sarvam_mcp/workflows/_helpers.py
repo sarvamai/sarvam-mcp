@@ -15,6 +15,7 @@ from typing import Any
 from sarvam_mcp._registry import ServerContext
 from sarvam_mcp.audio import StoredAudio
 from sarvam_mcp.observability import CallMetrics, ToolMetrics
+from sarvam_mcp.tools._common import SarvamLLM
 
 
 def _audio_mime(path: Path) -> str:
@@ -116,7 +117,7 @@ async def llm_complete(
     sc: ServerContext,
     messages: list[dict[str, Any]],
     *,
-    model: str = "sarvam-30b",
+    model: SarvamLLM = "sarvam-30b",
     temperature: float = 0.4,
     max_tokens: int = 600,
     metrics: ToolMetrics | None = None,

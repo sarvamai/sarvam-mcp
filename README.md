@@ -83,8 +83,8 @@ All defaults below reflect the latest non-deprecated models live as of 2026-04-2
 | `sarvam_stt_translate` | Audio → English text (DEPRECATED — use `stt_transcribe` with `mode=translate`) | `saaras:v2.5` | — |
 | `sarvam_stt_batch_submit` | Long-audio job init (Azure SAS) | `saaras:v3` | — |
 | `sarvam_stt_batch_status` | Long-audio job poll | — | — |
-| `sarvam_tts_speak` | Text → audio file | `bulbul:v3` (speaker `priya`) | `bulbul:v3-beta` |
-| `sarvam_tts_stream` | Text → streamed audio | `bulbul:v3` | `bulbul:v3-beta` |
+| `sarvam_tts_speak` | Text → audio file | `bulbul:v3` (speaker `priya`) | — |
+| `sarvam_tts_stream` | Text → streamed audio | `bulbul:v3` | — |
 | `sarvam_translate` | Cross-language text translate | `mayura:v1` | `sarvam-translate:v1` (22 langs) |
 | `sarvam_transliterate` | Script conversion | — | — |
 | `sarvam_identify_language` | Language + script detect (11 languages) | — | — |

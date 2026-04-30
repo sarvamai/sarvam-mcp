@@ -8,13 +8,11 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import ready_ctx
+from sarvam_mcp.tools._common import SarvamLLM, ready_ctx
 
 CHAT_PATH = "/v1/chat/completions"
 
 ChatRole = Literal["system", "user", "assistant"]
-# Live-tested 2026-04-27 — models exposed by this tool (recommended defaults).
-SarvamLLM = Literal["sarvam-30b", "sarvam-105b"]
 
 
 def register(mcp: FastMCP) -> None:
