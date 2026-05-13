@@ -16,7 +16,7 @@ from sarvam_mcp.tools._common import BulbulSpeaker, TtsLanguageCode, ready_ctx
 TTS_PATH = "/text-to-speech"
 TTS_STREAM_PATH = "/text-to-speech/stream"  # documented WebSocket path
 
-SampleRate = Literal[8000, 16000, 22050, 24000, 32000, 44100, 48000]
+SampleRate = Literal["8000", "16000", "22050", "24000", "32000", "44100", "48000"]
 TtsModel = Literal["bulbul:v3"]
 
 
@@ -46,7 +46,7 @@ def register(mcp: FastMCP) -> None:
             description="Voice. Default `priya` — use `sarvam_code_speakers` for the full v3 list.",
         ),
         speech_sample_rate: SampleRate = Field(
-            default=24000, description="PCM sample rate of the output WAV."
+            default="24000", description="PCM sample rate of the output WAV."
         ),
         pitch: float = Field(default=0.0, ge=-1.0, le=1.0),
         pace: float = Field(default=1.0, ge=0.3, le=3.0),
@@ -65,10 +65,10 @@ def register(mcp: FastMCP) -> None:
             "inputs": [text],
             "target_language_code": target_language_code,
             "speaker": speaker,
-            "speech_sample_rate": speech_sample_rate,
-            "pitch": pitch,
+            "speech_sample_rate": int(speech_sample_rate),
+            **({"pitch": pitch} if model != "bulbul:v3" else {}),
             "pace": pace,
-            "loudness": loudness,
+            **({"loudness": loudness} if model != "bulbul:v3" else {}),
             "enable_preprocessing": enable_preprocessing,
             "model": model,
         }
@@ -84,9 +84,7 @@ def register(mcp: FastMCP) -> None:
         wav_bytes = base64.b64decode(audios[0])
 
         filename = f"sarvam-tts-{uuid.uuid4().hex[:8]}.wav"
-        stored = await sc.audio_sink.store(
-            wav_bytes, filename=filename, mime_type="audio/wav"
-        )
+        stored = await sc.audio_sink.store(wav_bytes, filename=filename, mime_type="audio/wav")
 
         return {
             "file_path": stored.file_path,
@@ -113,7 +111,7 @@ def register(mcp: FastMCP) -> None:
         text: str = Field(description="Text to synthesize."),
         target_language_code: TtsLanguageCode = Field(),
         speaker: BulbulSpeaker = Field(default="priya"),
-        speech_sample_rate: SampleRate = Field(default=24000),
+        speech_sample_rate: SampleRate = Field(default="24000"),
         model: TtsModel = Field(default="bulbul:v3"),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
@@ -128,7 +126,7 @@ def register(mcp: FastMCP) -> None:
                             text=text,
                             target_language_code=target_language_code,
                             speaker=speaker,
-                            speech_sample_rate=speech_sample_rate,
+                            speech_sample_rate=int(speech_sample_rate),
                             model=model,
                         )
                     )
@@ -143,16 +141,14 @@ def register(mcp: FastMCP) -> None:
                                 chunks.append(base64.b64decode(event["audio"]))
             except Exception as exc:  # noqa: BLE001
                 # Fall back to REST if streaming endpoint is unavailable.
-                await ctx.warning(
-                    f"WebSocket streaming failed ({exc!r}); falling back to REST."
-                )
+                await ctx.warning(f"WebSocket streaming failed ({exc!r}); falling back to REST.")
                 rest_resp = await sc.client.post_json(
                     TTS_PATH,
                     json_body={
                         "inputs": [text],
                         "target_language_code": target_language_code,
                         "speaker": speaker,
-                        "speech_sample_rate": speech_sample_rate,
+                        "speech_sample_rate": int(speech_sample_rate),
                         "model": model,
                     },
                 )
@@ -166,9 +162,7 @@ def register(mcp: FastMCP) -> None:
             raise RuntimeError("TTS stream produced no audio.")
 
         filename = f"sarvam-tts-stream-{uuid.uuid4().hex[:8]}.wav"
-        stored = await sc.audio_sink.store(
-            wav_bytes, filename=filename, mime_type="audio/wav"
-        )
+        stored = await sc.audio_sink.store(wav_bytes, filename=filename, mime_type="audio/wav")
 
         return {
             "file_path": stored.file_path,
