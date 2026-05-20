@@ -15,12 +15,14 @@ import logging
 import os
 import sys
 
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import JSONResponse
+os.environ.setdefault("SARVAM_MCP_TRANSPORT", "http")
 
-from sarvam_mcp.auth.header import APIKeyAuthMiddleware
-from sarvam_mcp.server import build_server
+from starlette.middleware import Middleware  # noqa: E402
+from starlette.middleware.cors import CORSMiddleware  # noqa: E402
+from starlette.responses import JSONResponse  # noqa: E402
+
+from sarvam_mcp.auth.header import APIKeyAuthMiddleware  # noqa: E402
+from sarvam_mcp.server import build_server  # noqa: E402
 
 logger = logging.getLogger("sarvam_mcp.http")
 

@@ -36,6 +36,12 @@ class Config:
         base_path_str = os.environ.get("SARVAM_MCP_BASE_PATH", DEFAULT_BASE_PATH)
         mode_str = os.environ.get("SARVAM_AUDIO_OUTPUT_MODE", DEFAULT_OUTPUT_MODE).lower()
 
+        # In hosted HTTP mode, force "resources" — writing files to server disk
+        # is useless for remote clients; they need base64 data in the response.
+        transport = os.environ.get("SARVAM_MCP_TRANSPORT", "").lower()
+        if transport in ("http", "streamable-http"):
+            mode_str = "resources"
+
         if mode_str not in ("files", "resources", "both"):
             raise ValueError(
                 f"SARVAM_AUDIO_OUTPUT_MODE must be one of 'files', 'resources', 'both'; "
