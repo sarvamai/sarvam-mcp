@@ -75,13 +75,6 @@ def build_server() -> FastMCP:
     vision.register(mcp)
     pronunciation.register(mcp)
 
-    # Composite workflows — chain multiple atomic tools per call.
-    from sarvam_mcp.workflows import dub, localize, recall, voice
-
-    voice.register(mcp)
-    dub.register(mcp)
-    localize.register(mcp)
-    recall.register(mcp)
 
     from sarvam_mcp import code
 
