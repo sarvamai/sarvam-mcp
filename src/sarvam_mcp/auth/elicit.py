@@ -42,12 +42,20 @@ SETUP_HELP = (
 )
 
 
+def _is_http_mode() -> bool:
+    """Detect if we're running in hosted HTTP mode (no elicitation possible)."""
+    return os.environ.get("SARVAM_MCP_TRANSPORT", "").lower() in ("http", "streamable-http")
+
+
 async def ensure_auth(ctx: Context) -> None:
     """Guarantee that ``current_auth()`` will succeed for the rest of this call.
 
     If no provider is set yet, asks the client (via elicitation) for an API
     key. On success, persists to ``~/.sarvam/credentials`` and installs a
     ``StaticKeyProvider`` for the running server.
+
+    In HTTP mode, elicitation is skipped — the API key must come from the
+    request header (handled by ``auth.header.APIKeyAuthMiddleware``).
     """
     if _current.get() is not None:
         return  # already authenticated for this run
@@ -57,6 +65,13 @@ async def ensure_auth(ctx: Context) -> None:
     if refreshed:
         set_auth(StaticKeyProvider(refreshed))
         return
+
+    if _is_http_mode():
+        raise ToolError(
+            "Missing API key. In hosted mode, include your Sarvam API key in the "
+            "`api-subscription-key` request header or as `Authorization: Bearer <key>`. "
+            f"Get one at {DASHBOARD_KEY_MANAGEMENT_URL}"
+        )
 
     # Elicit from the client. Falls back to a clear error if unsupported.
     try:
