@@ -103,6 +103,10 @@ def main() -> None:
         login      — interactive OAuth login: opens your browser, catches
                      the callback, and saves the token to ~/.sarvam/credentials.
     """
+    if len(sys.argv) > 1 and sys.argv[1] in {"-h", "--help", "help"}:
+        _print_help()
+        return
+
     if len(sys.argv) > 1 and sys.argv[1] == "login":
         _run_login()
         return
@@ -114,6 +118,22 @@ def main() -> None:
     )
     server = build_server()
     server.run()
+
+
+def _print_help() -> None:
+    """Print CLI help without starting the MCP server."""
+    print(
+        """sarvam-mcp - Official Sarvam AI MCP server
+
+Usage:
+  sarvam-mcp              Run the MCP server over stdio
+  sarvam-mcp login        Log in with browser OAuth and save credentials
+  sarvam-mcp --help       Show this help
+
+Use this command as an MCP server entry point from clients such as Claude
+Desktop, Cursor, Windsurf, and other MCP-compatible tools.
+"""
+    )
 
 
 def _run_login() -> None:
