@@ -66,13 +66,12 @@ def register(mcp: FastMCP) -> None:
             "target_language_code": target_language_code,
             "speaker": speaker,
             "speech_sample_rate": speech_sample_rate,
+            "pitch": pitch,
             "pace": pace,
+            "loudness": loudness,
             "enable_preprocessing": enable_preprocessing,
             "model": model,
         }
-        if model != "bulbul:v3":
-            body["pitch"] = pitch
-            body["loudness"] = loudness
 
         with measure_tool() as metrics:
             payload, call = await sc.client.post_json(TTS_PATH, json_body=body)
