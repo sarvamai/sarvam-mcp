@@ -1,0 +1,403 @@
+{
+  "title": "Sarvam MCP — Tool Usage Analytics",
+  "description": "Tracks MCP tool invocations: volume, error rate, tool breakdown, installs, versions, and OS distribution.",
+  "tags": ["sarvam", "mcp", "tool-usage"],
+  "variables": {},
+  "layout": [
+    { "i": "total-calls",      "x": 0,  "y": 0, "w": 3, "h": 2 },
+    { "i": "unique-installs",  "x": 3,  "y": 0, "w": 3, "h": 2 },
+    { "i": "error-count",      "x": 6,  "y": 0, "w": 3, "h": 2 },
+    { "i": "success-count",    "x": 9,  "y": 0, "w": 3, "h": 2 },
+    { "i": "calls-over-time",  "x": 0,  "y": 2, "w": 12, "h": 3 },
+    { "i": "by-tool",          "x": 0,  "y": 5, "w": 6, "h": 3 },
+    { "i": "by-status",        "x": 6,  "y": 5, "w": 6, "h": 3 },
+    { "i": "by-version",       "x": 0,  "y": 8, "w": 4, "h": 3 },
+    { "i": "by-python",        "x": 4,  "y": 8, "w": 4, "h": 3 },
+    { "i": "by-os",            "x": 8,  "y": 8, "w": 4, "h": 3 }
+  ],
+  "widgets": [
+    {
+      "id": "total-calls",
+      "title": "Total Tool Calls",
+      "description": "Total number of MCP tool invocations",
+      "panelTypes": "value",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count",
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "unique-installs",
+      "title": "Unique Installs",
+      "description": "Distinct install_id values (anonymous unique users)",
+      "panelTypes": "value",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count_distinct",
+              "aggregateAttribute": {
+                "key": "mcp.install_id",
+                "dataType": "string",
+                "type": "tag",
+                "isColumn": false
+              },
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "error-count",
+      "title": "Errors",
+      "description": "Tool calls that returned an error",
+      "panelTypes": "value",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count",
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  },
+                  {
+                    "key": { "key": "mcp.status", "dataType": "string", "type": "tag", "isColumn": false },
+                    "op": "=",
+                    "value": "error"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "success-count",
+      "title": "Successes",
+      "description": "Tool calls that completed successfully",
+      "panelTypes": "value",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count",
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  },
+                  {
+                    "key": { "key": "mcp.status", "dataType": "string", "type": "tag", "isColumn": false },
+                    "op": "=",
+                    "value": "ok"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "calls-over-time",
+      "title": "Tool Calls Over Time",
+      "description": "Timeseries of tool calls, split by status",
+      "panelTypes": "graph",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count",
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [
+                {
+                  "key": "mcp.status",
+                  "dataType": "string",
+                  "type": "tag",
+                  "isColumn": false
+                }
+              ],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "by-tool",
+      "title": "Calls by Tool",
+      "description": "Which MCP tools are used most",
+      "panelTypes": "table",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count",
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [
+                {
+                  "key": "mcp.tool",
+                  "dataType": "string",
+                  "type": "tag",
+                  "isColumn": false
+                }
+              ],
+              "orderBy": [{ "columnName": "#SIGNOZ_VALUE", "order": "desc" }],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "by-status",
+      "title": "Calls by Status",
+      "description": "ok vs error breakdown",
+      "panelTypes": "table",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count",
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [
+                {
+                  "key": "mcp.status",
+                  "dataType": "string",
+                  "type": "tag",
+                  "isColumn": false
+                }
+              ],
+              "orderBy": [{ "columnName": "#SIGNOZ_VALUE", "order": "desc" }],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "by-version",
+      "title": "Package Version Distribution",
+      "description": "Which sarvam-mcp versions are in use",
+      "panelTypes": "table",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count",
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [
+                {
+                  "key": "mcp.version",
+                  "dataType": "string",
+                  "type": "tag",
+                  "isColumn": false
+                }
+              ],
+              "orderBy": [{ "columnName": "#SIGNOZ_VALUE", "order": "desc" }],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "by-python",
+      "title": "Python Version Distribution",
+      "description": "Python versions across installs",
+      "panelTypes": "table",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count",
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [
+                {
+                  "key": "mcp.python",
+                  "dataType": "string",
+                  "type": "tag",
+                  "isColumn": false
+                }
+              ],
+              "orderBy": [{ "columnName": "#SIGNOZ_VALUE", "order": "desc" }],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    },
+    {
+      "id": "by-os",
+      "title": "OS Distribution",
+      "description": "Operating system + architecture breakdown",
+      "panelTypes": "table",
+      "query": {
+        "queryType": "builder",
+        "builder": {
+          "queryData": [
+            {
+              "queryName": "A",
+              "dataSource": "logs",
+              "aggregateOperator": "count",
+              "filters": {
+                "items": [
+                  {
+                    "key": { "key": "body", "dataType": "string", "isColumn": true },
+                    "op": "=",
+                    "value": "tool_used"
+                  }
+                ],
+                "op": "AND"
+              },
+              "groupBy": [
+                {
+                  "key": "mcp.os",
+                  "dataType": "string",
+                  "type": "tag",
+                  "isColumn": false
+                }
+              ],
+              "orderBy": [{ "columnName": "#SIGNOZ_VALUE", "order": "desc" }],
+              "expression": "A",
+              "disabled": false
+            }
+          ],
+          "queryFormulas": []
+        }
+      }
+    }
+  ]
+}

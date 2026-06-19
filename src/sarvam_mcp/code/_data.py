@@ -198,7 +198,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "content_type": "application/json",
         "request_body": {
             "input":                "str, required",
-            "source_language_code": "str — BCP-47 or 'unknown'",
+            "source_language_code": "str — BCP-47 or 'auto' for auto-detect",
             "target_language_code": "str — BCP-47",
             "model":                "str",
             "mode":                 "str — formal | modern-colloquial | classic-colloquial | code-mixed (Mayura only)",

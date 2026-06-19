@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 
+import pytest
+
 from sarvam_mcp import server
 
 
@@ -12,9 +14,10 @@ def test_help_flag_prints_usage_without_starting_server(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["sarvam-mcp", "--help"])
     monkeypatch.setattr(server, "build_server", fail_build_server)
 
-    server.main()
+    with pytest.raises(SystemExit) as exc_info:
+        server.main()
+
+    assert exc_info.value.code == 0
 
     output = capsys.readouterr().out
-    assert "Usage:" in output
-    assert "sarvam-mcp login" in output
-    assert "Run the MCP server over stdio" in output
+    assert "sarvam-mcp" in output

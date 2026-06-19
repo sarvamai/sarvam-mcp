@@ -32,3 +32,8 @@ uv.lock
 *.mp3
 .env
 .env.local
+
+# Next.js (web/)
+web/node_modules/
+web/.next/
+web/out/

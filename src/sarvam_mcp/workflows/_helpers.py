@@ -65,9 +65,11 @@ async def translate_text(
     metrics: ToolMetrics | None = None,
 ) -> str:
     """Translate ``text`` and return the translated string."""
+    # Upstream /translate accepts "auto", not "unknown".
+    src = "auto" if source_language_code == "unknown" else source_language_code
     body_req: dict[str, Any] = {
         "input": text,
-        "source_language_code": source_language_code,
+        "source_language_code": src,
         "target_language_code": target_language_code,
         "model": model,
         "numerals_format": "international",

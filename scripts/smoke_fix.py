@@ -56,7 +56,7 @@ def write_json(name: str, payload):
 async def main():
     cfg = Config.load()
     set_auth(StaticKeyProvider(cfg.api_key))  # type: ignore[arg-type]
-    client = SarvamClient(cfg.base_url, region=cfg.region)
+    client = SarvamClient(cfg.base_url)
 
     # ── 1. text-analytics — try multipart with stringified questions ───
     print("\n=== TEXT ANALYTICS attempts ===")

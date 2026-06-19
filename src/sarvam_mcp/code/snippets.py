@@ -261,8 +261,7 @@ def _recommend(task: str) -> dict[str, Any]:
         "task": task,
         "suggestion": (
             "Couldn't pick confidently from the task description. "
-            "Browse the docs with sarvam_code_search_docs or list available "
-            "endpoints with sarvam_code_api_reference."
+            "List available endpoints with sarvam_code_api_reference."
         ),
     }
 
@@ -301,7 +300,7 @@ _VALID_TRANSLATE_MODELS = {"mayura:v1", "sarvam-translate:v1"}
 _VALID_STT_MODELS = {"saaras:v3"}
 _VALID_STT_MODES = {"transcribe", "translate", "verbatim", "translit", "codemix"}
 _VALID_SAARAS_MODELS = {"saaras:v3", "saaras:v3-realtime", "saaras:v2.5"}
-_VALID_LANGUAGE_CODES = {lang["code"] for lang in _data.ALL_LANGUAGES} | {"unknown"}
+_VALID_LANGUAGE_CODES = {lang["code"] for lang in _data.ALL_LANGUAGES} | {"auto", "unknown"}
 _TTS_LANG_CODES = {lang["code"] for lang in _data.LANGUAGES_BY_API["tts"]}
 
 

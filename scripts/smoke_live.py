@@ -86,8 +86,8 @@ async def main() -> None:
 
     cfg = Config.load()
     set_auth(StaticKeyProvider(cfg.api_key))  # type: ignore[arg-type]
-    client = SarvamClient(cfg.base_url, region=cfg.region)
-    print(f"Sarvam MCP smoke · base_url={cfg.base_url} region={cfg.region}")
+    client = SarvamClient(cfg.base_url)
+    print(f"Sarvam MCP smoke · base_url={cfg.base_url}")
 
     results: list[Result] = []
 

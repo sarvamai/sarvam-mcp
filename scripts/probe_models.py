@@ -31,7 +31,7 @@ async def probe(label: str, coro):
 async def main():
     cfg = Config.load()
     set_auth(StaticKeyProvider(cfg.api_key))  # type: ignore[arg-type]
-    c = SarvamClient(cfg.base_url, region=cfg.region)
+    c = SarvamClient(cfg.base_url)
 
     print("\n=== TTS (bulbul tags) ===")
     for v in ["bulbul:v3"]:

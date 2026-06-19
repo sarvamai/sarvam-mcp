@@ -46,7 +46,7 @@ def write_json(name: str, payload):
 async def main():
     cfg = Config.load()
     set_auth(StaticKeyProvider(cfg.api_key))  # type: ignore[arg-type]
-    client = SarvamClient(cfg.base_url, region=cfg.region)
+    client = SarvamClient(cfg.base_url)
 
     # ── TEXT ANALYTICS — questions as list of dicts ────────────────────
     print("=== TEXT ANALYTICS — questions=list of dicts ===")

@@ -15,7 +15,7 @@ from sarvam_mcp.http.errors import SarvamBadRequestError
 
 @pytest.fixture
 async def client():
-    c = SarvamClient("https://api.sarvam.ai", region="in")
+    c = SarvamClient("https://api.sarvam.ai")
     yield c
     await c.aclose()
 
@@ -31,7 +31,7 @@ async def test_auth_header_is_attached(client, httpx_mock):
     payload, metrics = await client.post_json("/translate", json_body={"input": "hi"})
 
     request = httpx_mock.get_request()
-    assert request.headers["authorization"] == "Bearer test_jwt_token_for_unit_tests_abcd"
+    assert request.headers["api-subscription-key"] == "sk_test_key_for_unit_tests_abcd"
     assert payload == {"translated_text": "ok"}
     assert metrics.request_id == "req_123"
     assert metrics.status_code == 200

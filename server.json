@@ -1,0 +1,52 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.sarvamai/sarvam-mcp",
+  "description": "Official Sarvam AI MCP server — STT, TTS, Translate, Transliterate, LLM, Vision OCR for Indic languages",
+  "status": "active",
+  "repository": {
+    "url": "https://github.com/sarvamai/sarvam-mcp",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registry_type": "pypi",
+      "registry_base_url": "https://pypi.org",
+      "identifier": "sarvam-mcp",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environment_variables": [
+        {
+          "name": "SARVAM_API_KEY",
+          "description": "Your Sarvam API key from dashboard.sarvam.ai",
+          "is_required": true,
+          "format": "string",
+          "is_secret": true
+        },
+        {
+          "name": "SARVAM_API_BASE_URL",
+          "description": "Override API base URL for testing/staging. Defaults to https://api.sarvam.ai",
+          "is_required": false,
+          "format": "string",
+          "is_secret": false
+        },
+        {
+          "name": "SARVAM_MCP_BASE_PATH",
+          "description": "Base path for file outputs. Defaults to ~/Desktop if not provided.",
+          "is_required": false,
+          "format": "string",
+          "is_secret": false
+        },
+        {
+          "name": "SARVAM_AUDIO_OUTPUT_MODE",
+          "description": "Output mode: 'files', 'resources', or 'both'. Defaults to 'files'.",
+          "is_required": false,
+          "format": "string",
+          "is_secret": false
+        }
+      ]
+    }
+  ]
+}

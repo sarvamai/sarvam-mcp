@@ -12,7 +12,7 @@ from sarvam_mcp.auth import StaticKeyProvider, set_auth
 @pytest.fixture(autouse=True)
 def _set_test_auth():
     """Every test gets a deterministic auth provider in its context."""
-    set_auth(StaticKeyProvider("test_jwt_token_for_unit_tests_abcd"))
+    set_auth(StaticKeyProvider("sk_test_key_for_unit_tests_abcd"))
 
 
 @pytest.fixture

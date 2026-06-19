@@ -41,7 +41,7 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         input: str = Field(description="Text to translate (max ~2000 chars)."),
         source_language_code: LanguageCode = Field(
-            description="Source BCP-47 code, or 'unknown' to auto-detect.",
+            description="Source BCP-47 code, or 'auto' to auto-detect.",
         ),
         target_language_code: LanguageCode = Field(description="Target BCP-47 code."),
         model: TranslateModel = Field(
@@ -64,9 +64,11 @@ def register(mcp: FastMCP) -> None:
         enable_preprocessing: bool = Field(default=True),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
+        # Upstream /translate accepts "auto", not "unknown".
+        src = "auto" if source_language_code == "unknown" else source_language_code
         body: dict[str, Any] = {
             "input": input,
-            "source_language_code": source_language_code,
+            "source_language_code": src,
             "target_language_code": target_language_code,
             "model": model,
             "numerals_format": numerals_format,

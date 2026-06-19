@@ -19,30 +19,11 @@ def test_credentials_file_parses_quoted_and_comments(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     _write_creds(
         tmp_path,
-        '# leading comment\ntoken = "jwt_quoted"\nregion=in\n\n  ignored line\n',
+        '# leading comment\napi_key = "sk_quoted"\n\n  ignored line\n',
     )
     parsed = _read_credentials_file()
-    assert parsed["token"] == "jwt_quoted"
-    assert parsed["region"] == "in"
+    assert parsed["api_key"] == "sk_quoted"
     assert "ignored line" not in parsed
-
-
-def test_region_from_credentials_file(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    _write_creds(tmp_path, "token = some_jwt\nregion = us\n")
-    monkeypatch.delenv("SARVAM_API_REGION", raising=False)
-
-    cfg = Config.load()
-    assert cfg.region == "us"
-
-
-def test_region_env_wins_over_credentials_file(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    _write_creds(tmp_path, "token = some_jwt\nregion = us\n")
-    monkeypatch.setenv("SARVAM_API_REGION", "eu")
-
-    cfg = Config.load()
-    assert cfg.region == "eu"
 
 
 def test_invalid_output_mode_raises(monkeypatch, tmp_path):
@@ -58,3 +39,18 @@ def test_base_path_expands(monkeypatch, tmp_path):
     monkeypatch.setenv("SARVAM_MCP_BASE_PATH", str(target))
     cfg = Config.load()
     assert cfg.base_path == Path(target)
+
+
+def test_api_key_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SARVAM_API_KEY", "sk_from_env")
+    cfg = Config.load()
+    assert cfg.api_key == "sk_from_env"
+
+
+def test_api_key_from_credentials(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("SARVAM_API_KEY", raising=False)
+    _write_creds(tmp_path, "api_key = sk_from_file\n")
+    cfg = Config.load()
+    assert cfg.api_key == "sk_from_file"

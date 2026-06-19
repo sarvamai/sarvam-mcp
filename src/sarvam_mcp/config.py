@@ -1,4 +1,4 @@
-"""Configuration: env vars, ~/.sarvam/credentials, region, output mode."""
+"""Configuration: env vars, ~/.sarvam/credentials, output mode."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from typing import Literal
 OutputMode = Literal["files", "resources", "both"]
 
 DEFAULT_BASE_URL = "https://api.sarvam.ai"
-DEFAULT_REGION = "in"
 DEFAULT_BASE_PATH = "~/Desktop"
 DEFAULT_OUTPUT_MODE: OutputMode = "files"
 
@@ -19,7 +18,7 @@ DEFAULT_OUTPUT_MODE: OutputMode = "files"
 class Config:
     """Resolved runtime configuration. Built once at server startup."""
 
-    region: str = DEFAULT_REGION
+    api_key: str | None = None
     base_url: str = DEFAULT_BASE_URL
     base_path: Path = field(default_factory=lambda: Path(DEFAULT_BASE_PATH).expanduser())
     output_mode: OutputMode = DEFAULT_OUTPUT_MODE
@@ -29,16 +28,10 @@ class Config:
         """Resolve config from env vars, falling back to ~/.sarvam/credentials."""
         creds = _read_credentials_file()
 
-        region = os.environ.get("SARVAM_API_REGION") or creds.get("region") or DEFAULT_REGION
+        api_key = os.environ.get("SARVAM_API_KEY") or creds.get("api_key")
         base_url = os.environ.get("SARVAM_API_BASE_URL", DEFAULT_BASE_URL)
         base_path_str = os.environ.get("SARVAM_MCP_BASE_PATH", DEFAULT_BASE_PATH)
         mode_str = os.environ.get("SARVAM_AUDIO_OUTPUT_MODE", DEFAULT_OUTPUT_MODE).lower()
-
-        # In hosted HTTP mode, force "resources" — writing files to server disk
-        # is useless for remote clients; they need base64 data in the response.
-        transport = os.environ.get("SARVAM_MCP_TRANSPORT", "").lower()
-        if transport in ("http", "streamable-http"):
-            mode_str = "resources"
 
         if mode_str not in ("files", "resources", "both"):
             raise ValueError(
@@ -49,7 +42,7 @@ class Config:
         base_path = Path(base_path_str).expanduser()
 
         return cls(
-            region=region,
+            api_key=api_key,
             base_url=base_url.rstrip("/"),
             base_path=base_path,
             output_mode=mode_str,  # type: ignore[arg-type]

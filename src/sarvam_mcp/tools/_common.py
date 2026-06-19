@@ -88,7 +88,11 @@ async def resolve_file_input(
 # ---- Language codes -------------------------------------------------------
 #
 # Sarvam uses BCP-47-style codes with the ISO 639-3 language subtag for
-# constitutionally-listed languages. ``unknown`` lets the API auto-detect.
+# constitutionally-listed languages.
+# Auto-detect: the Translate/Transliterate APIs accept ``"auto"``; STT
+# accepts ``"unknown"``.  Both values are exposed so the agent can use
+# either; tool implementations map to the value the upstream endpoint
+# expects before calling the API.
 
 LanguageCode = Literal[
     "en-IN",  # English
@@ -114,7 +118,8 @@ LanguageCode = Literal[
     "brx-IN",  # Bodo
     "mai-IN",  # Maithili
     "doi-IN",  # Dogri
-    "unknown",  # Auto-detect
+    "auto",  # Auto-detect (Translate / Transliterate APIs)
+    "unknown",  # Auto-detect (STT API, kept for backward compat)
 ]
 
 # Subset that the TTS API (bulbul:v3) supports. STT covers all 23 above.

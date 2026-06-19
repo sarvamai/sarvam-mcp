@@ -6,12 +6,9 @@ register, the server won't start and Claude Desktop will fail silently.
 
 from __future__ import annotations
 
-import pytest
-
 EXPECTED_TOOLS = {
-    # Auth
-    "sarvam_tools_auth_login",
-    "sarvam_tools_auth_status",
+    # API key management
+    "sarvam_tools_set_api_key",
     # Atomic — one tool per Sarvam endpoint
     "sarvam_tools_stt_transcribe",
     "sarvam_tools_stt_translate",

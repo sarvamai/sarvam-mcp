@@ -4,6 +4,11 @@ on:
   push:
     tags: ["v*-qa"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.2.0). Leave blank to use pyproject.toml as-is."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -21,18 +26,46 @@ jobs:
         with:
           version: "0.6.14"
 
-      - name: Verify tag version matches pyproject.toml
+      - name: Resolve and verify version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          # Strip environment suffix (e.g. v0.1.1-qa → 0.1.1)
-          TAG_VERSION="${TAG#v}"
-          TAG_VERSION="${TAG_VERSION%-qa}"
           PKG_VERSION="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
-          echo "Tag version: $TAG_VERSION"
-          echo "Package version: $PKG_VERSION"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "ERROR: Tag version ($TAG_VERSION) does not match pyproject.toml version ($PKG_VERSION)"
-            exit 1
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            # Triggered by a tag push: derive version from the tag and verify it matches.
+            TAG="${GITHUB_REF_NAME}"
+            # Strip leading "v" and trailing "-qa" (e.g. v0.1.1-qa → 0.1.1)
+            TARGET_VERSION="${TAG#v}"
+            TARGET_VERSION="${TARGET_VERSION%-qa}"
+            echo "Tag version: $TARGET_VERSION"
+            echo "Package version: $PKG_VERSION"
+            if [ "$TARGET_VERSION" != "$PKG_VERSION" ]; then
+              echo "ERROR: Tag version ($TARGET_VERSION) does not match pyproject.toml version ($PKG_VERSION)"
+              exit 1
+            fi
+          elif [ -n "$INPUT_VERSION" ]; then
+            # Manual run with an explicit version: write it into pyproject.toml.
+            echo "Manual run: setting version to $INPUT_VERSION (pyproject.toml was $PKG_VERSION)"
+            python - "$INPUT_VERSION" <<'PY'
+          import re, sys
+          version = sys.argv[1]
+          path = "pyproject.toml"
+          text = open(path, encoding="utf-8").read()
+          new, n = re.subn(
+              r'(?m)^(version\s*=\s*)"[^"]*"',
+              lambda m: f'{m.group(1)}"{version}"',
+              text,
+              count=1,
+          )
+          if n != 1:
+              sys.exit(f"Could not find a version line to update in {path}")
+          open(path, "w", encoding="utf-8").write(new)
+          print(f"Updated {path} version to {version}")
+          PY
+          else
+            # Manual run with no version input: publish pyproject.toml as-is.
+            echo "Manual run: using pyproject.toml version $PKG_VERSION"
           fi
 
       - name: Sync dev deps and run tests

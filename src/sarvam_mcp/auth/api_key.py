@@ -1,22 +1,21 @@
-"""Static token auth provider — wraps an OAuth JWT for outbound API calls."""
+"""Static API key auth provider for outbound Sarvam API calls."""
 
 from __future__ import annotations
 
 
 class StaticKeyProvider:
-    """Wraps an OAuth JWT token obtained via the Sarvam login flow.
+    """Wraps an API key (sk_...) for outbound requests to api.sarvam.ai.
 
-    All outbound requests to ``api.sarvam.ai`` use the
-    ``Authorization: Bearer`` header.
+    All outbound requests use the ``api-subscription-key`` header.
     """
 
-    def __init__(self, token: str) -> None:
-        if not token:
-            raise ValueError("Auth token is empty.")
-        self._key = token
+    def __init__(self, api_key: str) -> None:
+        if not api_key:
+            raise ValueError("API key is empty.")
+        self._key = api_key
 
     async def headers(self, *, scope: str | None = None) -> dict[str, str]:  # noqa: ARG002
-        return {"Authorization": f"Bearer {self._key}"}
+        return {"api-subscription-key": self._key}
 
     async def refresh(self) -> None:
         return None
@@ -24,4 +23,4 @@ class StaticKeyProvider:
     @property
     def principal(self) -> str:
         suffix = self._key[-4:] if len(self._key) >= 4 else "****"
-        return f"jwt:****{suffix}"
+        return f"key:****{suffix}"

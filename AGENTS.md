@@ -2,16 +2,15 @@
 
 ## Tool Namespace Routing
 
-This MCP server exposes three tool namespaces. Pick the right one:
+This MCP server exposes two tool namespaces plus a key management tool:
 
-### `sarvam_tools_auth_*` — Authentication
+### `sarvam_tools_set_api_key` — API Key Management
 
-Use when the user needs to log in or check auth status:
+Use when the user needs to set or update their API key:
 
-- `sarvam_tools_auth_login` — Opens browser for OAuth login, stores token locally
-- `sarvam_tools_auth_status` — Check if authenticated
-
-If any runtime tool returns an authentication error, call `sarvam_tools_auth_login` first.
+- If any tool returns an auth error, call `sarvam_tools_set_api_key` — it will direct the user to the dashboard and accept their pasted key.
+- The key is saved globally to `~/.sarvam/credentials` so it persists across sessions.
+- Same tool handles first-time setup and key rotation.
 
 ### `sarvam_tools_*` — Runtime (do the thing NOW)
 
@@ -46,17 +45,18 @@ These tools return documentation, code snippets, API reference, and project temp
 
 > Is the user asking you to **use** Sarvam right now, or to **write code** that uses Sarvam?
 >
-> - Use Sarvam → `sarvam_tools_*` (authenticate first if needed via `sarvam_tools_auth_login`)
+> - Use Sarvam → `sarvam_tools_*`
 > - Write code that uses Sarvam → `sarvam_code_*`
 
 ## Authentication
 
-Authentication uses **OAuth only**. No API keys are needed.
+Authentication uses **API keys**.
 
-- **First-time setup:** Call `sarvam_tools_auth_login` or run `sarvam-mcp login` from the terminal.
-- **How it works:** Opens a browser for Sarvam OAuth login, catches the callback on localhost, and stores the JWT to `~/.sarvam/credentials`.
-- **After login:** All `sarvam_tools_*` calls use the stored token automatically via `Authorization: Bearer` headers.
-- **HTTP/hosted mode:** Clients authenticate via OAuth discovery (RFC 9728). The server returns `401` with `WWW-Authenticate` headers pointing to the OAuth authorization server.
+- **Setup:** Set `SARVAM_API_KEY` in the MCP client config JSON (`"env": {"SARVAM_API_KEY": "sk_..."}`), or store it in `~/.sarvam/credentials` as `api_key = sk_...`.
+- **Get a key:** Sign up / log in at [dashboard.sarvam.ai/key-management](https://dashboard.sarvam.ai/key-management) and copy your API key.
+- **How it works:** The server reads the key from the env var (or credentials file) at startup and sends it as `api-subscription-key` header on all outbound Sarvam API calls.
+
+If a tool returns an auth error, the user needs to check their API key is set correctly.
 
 ## Architecture
 
@@ -65,18 +65,14 @@ src/sarvam_mcp/
 ├── server.py          # FastMCP entry point, registers all tools
 ├── config.py          # Env vars + ~/.sarvam/credentials
 ├── _registry.py       # ServerContext dataclass (config + client + sink)
-├── auth/              # OAuth token management
-│   ├── api_key.py     # StaticKeyProvider (produces Bearer auth headers)
+├── auth/              # API key management
+│   ├── api_key.py     # StaticKeyProvider (produces api-subscription-key headers)
 │   ├── context.py     # ContextVar for current provider
-│   ├── header.py      # HTTP middleware (Bearer token extraction)
-│   ├── jwt.py         # Dashboard JWT verification
-│   └── elicit.py      # Auth gate — directs to auth tool if not logged in
-├── oauth/             # OAuth 2.1 server (RFC 9728, dynamic registration)
+│   └── elicit.py      # Auth gate — errors if no key is set
 ├── http/              # SarvamClient (httpx wrapper, retry, error mapping)
 ├── audio/             # AudioSink strategy (files / resources / both)
 ├── observability.py   # Latency + cost + request-id tracking
 ├── tools/             # Atomic tools — one Sarvam API call each
-│   └── auth.py        # OAuth login + status tools
 ├── workflows/         # Composite tools — chain multiple atomic calls
 └── code/              # Builder tools — docs, snippets
     ├── _data.py       # Hard-coded reference tables
@@ -91,6 +87,6 @@ src/sarvam_mcp/
 - `_data.py` and `_snippets.py` are reference tables — update carefully.
 - Run `pytest -q` before committing.
 
-**Packaging note:** Default to `pip install sarvam-mcp`, `uvx sarvam-mcp`, or the mcp.sarvam.ai installer. **Suggest `git clone` (and a from-source / editable install) only if the user does not have `pip`** and the packaged options are not available — not as a routine alternative. Contributors still clone to develop and run tests.
+**Packaging note:** Default to `pip install sarvam-mcp` or `uvx sarvam-mcp`. **Suggest `git clone` (and a from-source / editable install) only if the user does not have `pip`** — not as a routine alternative. Contributors still clone to develop and run tests.
 
-**Platforms:** The server targets **macOS, Windows, and Linux** (Python 3.11+). When helping with setup, prefer OS-agnostic instructions (`pip` / `uvx`, same MCP JSON); call out Windows vs Unix **config file paths** only when the user's client or OS is known (see README *Per-client paths*).
+**Platforms:** The server targets **macOS, Windows, and Linux** (Python 3.11+). When helping with setup, prefer OS-agnostic instructions (`pip` / `uvx`, same MCP JSON); call out Windows vs Unix **config file paths** only when the user's client or OS is known (see README).

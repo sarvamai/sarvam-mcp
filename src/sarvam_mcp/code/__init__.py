@@ -3,9 +3,8 @@ Sarvam-using apps (vs ``sarvam_tools_*`` which INVOKE Sarvam at runtime).
 
 Two families (registered separately so individual modules stay small):
 
-- ``code.docs``   — 5 reference tools (search_docs, api_reference, languages,
-                    speakers, pricing). Backed by a TTL-cached fetch of
-                    ``docs.sarvam.ai/llms-full.txt`` plus hard-coded tables.
+- ``code.docs``   — 4 reference tools (api_reference, languages, speakers,
+                    pricing). Backed by hard-coded tables in ``_data.py``.
 - ``code.snippets`` — tested code snippets + model recommendation + request
                       validation.
 """

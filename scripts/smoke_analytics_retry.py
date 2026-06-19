@@ -19,7 +19,7 @@ from sarvam_mcp.http import SarvamClient  # noqa: E402
 async def main():
     cfg = Config.load()
     set_auth(StaticKeyProvider(cfg.api_key))  # type: ignore[arg-type]
-    client = SarvamClient(cfg.base_url, region=cfg.region)
+    client = SarvamClient(cfg.base_url)
 
     text = (
         "Sarvam AI is an Indian generative AI company founded in 2023, "

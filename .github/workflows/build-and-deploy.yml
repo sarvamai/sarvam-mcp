@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -15,9 +17,7 @@ env:
 jobs:
   build-and-push:
     runs-on: [self-hosted, size-small-public]
-    if: |
-      github.repository == 'sarvamai/sarvam-mcp' &&
-      github.event_name == 'push'
+    if: github.repository == 'sarvamai/sarvam-mcp'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -28,6 +28,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Azure
+        if: github.event_name == 'push'
         run: |
           echo "$AZURE_REGISTRY_PASSWORD" | docker login ${{ env.AZURE_REGISTRY }} \
             -u ${{ env.AZURE_USERNAME }} --password-stdin
@@ -45,11 +46,12 @@ jobs:
           fi
 
       - name: Determine Tags
+        if: github.event_name == 'push'
         id: meta
         shell: bash
         run: |
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          IMAGE_NAME="sarvam-mcp"
+          IMAGE_NAME="sarvam-mcp-website"
           AZURE_IMAGE="${{ env.AZURE_REGISTRY }}/$IMAGE_NAME"
 
           if [[ "${{ github.ref_name }}" == "main" ]]; then
@@ -74,9 +76,9 @@ jobs:
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: tools/sarvam-mcp/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=registry,ref=${{ env.AZURE_REGISTRY }}/sarvam-mcp:buildcache
-          cache-to: type=registry,ref=${{ env.AZURE_REGISTRY }}/sarvam-mcp:buildcache,mode=max
+          context: web
+          file: web/Dockerfile
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags || 'sarvam-mcp-website:pr-check' }}
+          cache-from: type=registry,ref=${{ env.AZURE_REGISTRY }}/sarvam-mcp-website:buildcache
+          cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/sarvam-mcp-website:buildcache,mode=max', env.AZURE_REGISTRY) || '' }}

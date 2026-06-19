@@ -8,7 +8,7 @@ commonEnv: []
 
 sarvam-mcp-website:
   name: "sarvam-mcp-website"
-  namespace: "apps-authoring"
+  namespace: "sarvam-mcp"
 
   serviceAccount:
     enabled: true
@@ -43,8 +43,13 @@ sarvam-mcp-website:
       env:
         - name: PORT
           value: "8000"
-        - name: SARVAM_MCP_TRANSPORT
-          value: "http"
+        - name: OTEL_SERVICE_NAME
+          value: "sarvam-mcp"
+        - name: SIGNOZ_INGESTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sarvam-mcp-secrets
+              key: signoz-ingestion-key
       resources:
         requests:
           cpu: "100m"

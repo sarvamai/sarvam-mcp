@@ -1,14 +1,12 @@
 """``sarvam_code_*`` documentation tools.
 
-Five tools exposed:
-  - sarvam_code_search_docs    — full-text search across docs.sarvam.ai
+Four tools exposed:
   - sarvam_code_api_reference  — endpoint shapes (params, response, gotchas)
   - sarvam_code_languages      — supported language codes per API
   - sarvam_code_speakers       — TTS speakers per model tag
   - sarvam_code_pricing        — current pricing structure
 
-Source-of-truth data lives in ``code/_data.py``; the search tool fetches
-``docs.sarvam.ai/llms-full.txt`` lazily through ``code/source.py``.
+Source-of-truth data lives in ``code/_data.py``.
 """
 
 from __future__ import annotations
@@ -20,18 +18,6 @@ from pydantic import Field
 
 from sarvam_mcp.auth.elicit import ensure_auth
 from sarvam_mcp.code import _data
-from sarvam_mcp.code.index import chunk_docs, search
-from sarvam_mcp.code.source import fetch_docs
-
-# Stable for the life of the process. First call lazily populates.
-_INDEX_CACHE: list = []
-
-
-async def _get_index() -> list:
-    if not _INDEX_CACHE:
-        text = await fetch_docs()
-        _INDEX_CACHE.extend(chunk_docs(text))
-    return _INDEX_CACHE
 
 
 # ---- Type literals -------------------------------------------------------
@@ -57,39 +43,6 @@ TtsModel = Literal["bulbul:v3"]
 
 
 def register(mcp: FastMCP) -> None:
-    @mcp.tool(
-        name="sarvam_code_search_docs",
-        description=(
-            "Build-time tool — helps write code that uses Sarvam. For runtime actions, use sarvam_tools_* instead.\n\n"
-            "Search Sarvam's developer docs (docs.sarvam.ai). Use this when "
-            "you're writing code that calls Sarvam APIs and need to look up "
-            "endpoint behavior, error codes, or model details. Returns the "
-            "top matching sections with snippets and URLs."
-        ),
-    )
-    async def sarvam_code_search_docs(
-        ctx: Context,
-        query: str = Field(description="Plain-text search query, e.g. 'streaming TTS', 'language codes'."),
-        limit: int = Field(default=5, ge=1, le=20),
-    ) -> dict[str, Any]:
-        await ensure_auth(ctx)
-        chunks = await _get_index()
-        hits = search(chunks, query, limit=limit)
-        return {
-            "query": query,
-            "results": [
-                {
-                    "section": hit.chunk.heading,
-                    "level": hit.chunk.level,
-                    "url": hit.chunk.url,
-                    "snippet": hit.snippet,
-                    "score": round(hit.score, 3),
-                }
-                for hit in hits
-            ],
-            "result_count": len(hits),
-        }
-
     @mcp.tool(
         name="sarvam_code_api_reference",
         description=(

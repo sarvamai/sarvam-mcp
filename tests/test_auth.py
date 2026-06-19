@@ -8,26 +8,26 @@ from sarvam_mcp.auth import StaticKeyProvider, current_auth, set_auth
 from sarvam_mcp.auth.context import _current
 
 
-async def test_static_provider_emits_bearer_header():
-    provider = StaticKeyProvider("test_jwt_token_1234")
+async def test_static_provider_emits_api_key_header():
+    provider = StaticKeyProvider("sk_test_1234")
     headers = await provider.headers()
-    assert headers == {"Authorization": "Bearer test_jwt_token_1234"}
+    assert headers == {"api-subscription-key": "sk_test_1234"}
 
 
 async def test_static_provider_principal_redacts_secret():
-    provider = StaticKeyProvider("test_jwt_token_1234")
-    assert provider.principal == "jwt:****1234"
-    assert "token" not in provider.principal
+    provider = StaticKeyProvider("sk_test_1234")
+    assert provider.principal == "key:****1234"
+    assert "test" not in provider.principal
 
 
 async def test_static_provider_ignores_scope_argument():
-    provider = StaticKeyProvider("test_jwt_token_1234")
+    provider = StaticKeyProvider("sk_test_1234")
     base = await provider.headers()
     scoped = await provider.headers(scope="flow:run")
     assert base == scoped
 
 
-def test_empty_token_rejected():
+def test_empty_key_rejected():
     with pytest.raises(ValueError):
         StaticKeyProvider("")
 
@@ -42,6 +42,6 @@ def test_current_auth_raises_when_unset():
 
 
 def test_set_and_get_round_trip():
-    provider = StaticKeyProvider("test_jwt_other")
+    provider = StaticKeyProvider("sk_other_key")
     set_auth(provider)
     assert current_auth() is provider

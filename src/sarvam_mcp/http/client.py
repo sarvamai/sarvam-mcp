@@ -34,15 +34,13 @@ class SarvamClient:
         self,
         base_url: str,
         *,
-        region: str = "in",
         timeout: httpx.Timeout = DEFAULT_TIMEOUT,
     ) -> None:
         self._base_url = base_url.rstrip("/")
-        self._region = region
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=timeout,
-            headers={"User-Agent": f"sarvam-mcp/0.1.0 (region={region})"},
+            headers={"User-Agent": "sarvam-mcp/0.1.0"},
         )
 
     async def aclose(self) -> None:

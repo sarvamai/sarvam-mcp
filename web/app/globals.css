@@ -1,0 +1,100 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Matter", system-ui, sans-serif;
+  background: #f5f5f5;
+  color: #141414;
+  -webkit-font-smoothing: antialiased;
+  padding: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 580px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-radius: 20px;
+  padding: 24px;
+  border: 1px solid #f0f0f0;
+  background: #fff;
+}
+
+.logo {
+  height: 32px;
+  margin: 0 auto 4px;
+}
+
+.card p {
+  color: #555;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.card a {
+  color: #141414;
+  text-decoration: none;
+}
+.card a:hover {
+  text-decoration: underline;
+}
+
+.cmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e5e5e5;
+  background: #fafafa;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.cmd:hover {
+  border-color: #ccc;
+}
+
+.cmd code {
+  flex: 1;
+  font-family: ui-monospace, "JetBrains Mono", "Fira Code", Menlo, monospace;
+  font-size: 12px;
+  color: #141414;
+  user-select: all;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+.cmd .copy-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: #999;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.cmd:hover .copy-icon {
+  color: #141414;
+}
+
+.note {
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+}
+
+.links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 12px;
+  margin-top: 4px;
+}

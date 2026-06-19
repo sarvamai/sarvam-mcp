@@ -12,7 +12,7 @@ from sarvam_mcp.http import SarvamClient
 async def main():
     cfg = Config.load()
     set_auth(StaticKeyProvider(cfg.api_key))  # type: ignore[arg-type]
-    c = SarvamClient(cfg.base_url, region=cfg.region)
+    c = SarvamClient(cfg.base_url)
     try:
         await c.post_json(
             "/text-to-speech",

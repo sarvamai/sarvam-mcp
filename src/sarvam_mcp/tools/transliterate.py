@@ -28,7 +28,7 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         input: str = Field(description="Text to transliterate."),
         source_language_code: LanguageCode = Field(
-            description="Source language code (e.g. 'hi-IN').",
+            description="Source language code (e.g. 'hi-IN'), or 'auto' to auto-detect.",
         ),
         target_language_code: LanguageCode = Field(
             description="Target language code (script of the output).",
@@ -44,9 +44,11 @@ def register(mcp: FastMCP) -> None:
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
+        # Upstream /transliterate accepts "auto", not "unknown".
+        src = "auto" if source_language_code == "unknown" else source_language_code
         body: dict[str, Any] = {
             "input": input,
-            "source_language_code": source_language_code,
+            "source_language_code": src,
             "target_language_code": target_language_code,
             "numerals_format": numerals_format,
             "spoken_form": spoken_form,
