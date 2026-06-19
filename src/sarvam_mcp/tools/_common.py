@@ -83,6 +83,7 @@ async def resolve_file_input(
             tmp.close()
             yield tmp_path
     finally:
+        tmp.close()
         tmp_path.unlink(missing_ok=True)
 
 # ---- Language codes -------------------------------------------------------
