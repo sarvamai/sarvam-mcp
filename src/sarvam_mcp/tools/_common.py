@@ -69,18 +69,20 @@ async def resolve_file_input(
             yield tmp_path
         else:
             assert file_url is not None
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-                async with client.stream("GET", file_url) as resp:
-                    resp.raise_for_status()
-                    downloaded = 0
-                    async for chunk in resp.aiter_bytes(chunk_size=65536):
-                        downloaded += len(chunk)
-                        if downloaded > max_bytes:
-                            raise ValueError(
-                                f"Downloaded file exceeds {max_bytes} byte limit."
-                            )
-                        tmp.write(chunk)
-            tmp.close()
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
+                    async with client.stream("GET", file_url) as resp:
+                        resp.raise_for_status()
+                        downloaded = 0
+                        async for chunk in resp.aiter_bytes(chunk_size=65536):
+                            downloaded += len(chunk)
+                            if downloaded > max_bytes:
+                                raise ValueError(
+                                    f"Downloaded file exceeds {max_bytes} byte limit."
+                                )
+                            tmp.write(chunk)
+            finally:
+                tmp.close()
             yield tmp_path
     finally:
         tmp_path.unlink(missing_ok=True)
