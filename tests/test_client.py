@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from sarvam_mcp import __version__
 from sarvam_mcp.http import (
     SarvamAPIError,
     SarvamAuthError,
@@ -35,6 +36,21 @@ async def test_auth_header_is_attached(client, httpx_mock):
     assert payload == {"translated_text": "ok"}
     assert metrics.request_id == "req_123"
     assert metrics.status_code == 200
+
+
+async def test_user_agent_reports_package_version(client, httpx_mock):
+    # The outbound User-Agent must track the installed package version so
+    # Sarvam's server-side telemetry attributes traffic to the right release.
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.sarvam.ai/translate",
+        json={"translated_text": "ok"},
+    )
+
+    await client.post_json("/translate", json_body={"input": "hi"})
+
+    request = httpx_mock.get_request()
+    assert request.headers["user-agent"] == f"sarvam-mcp/{__version__}"
 
 
 async def test_401_maps_to_auth_error(client, httpx_mock):

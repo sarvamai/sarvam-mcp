@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from sarvam_mcp import __version__
 from sarvam_mcp.auth.context import current_auth
 from sarvam_mcp.http.errors import (
     SarvamAPIError,
@@ -25,6 +26,7 @@ from sarvam_mcp.http.retry import retry_async
 from sarvam_mcp.observability import CallMetrics, metrics_from_response_headers
 
 DEFAULT_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
+USER_AGENT = f"sarvam-mcp/{__version__}"
 
 
 class SarvamClient:
@@ -40,7 +42,7 @@ class SarvamClient:
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=timeout,
-            headers={"User-Agent": "sarvam-mcp/0.1.0"},
+            headers={"User-Agent": USER_AGENT},
         )
 
     async def aclose(self) -> None:
