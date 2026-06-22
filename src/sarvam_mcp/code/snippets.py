@@ -10,7 +10,6 @@ from typing import Any, Literal
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
-from sarvam_mcp.auth.elicit import ensure_auth
 from sarvam_mcp.code import _data
 from sarvam_mcp.code._snippets import SNIPPETS
 
@@ -38,7 +37,6 @@ def register(mcp: FastMCP) -> None:
             description="Programming language for the snippet.",
         ),
     ) -> dict[str, Any]:
-        await ensure_auth(ctx)
         snippet = SNIPPETS.get((api, language))
         if not snippet:
             return {
@@ -75,7 +73,6 @@ def register(mcp: FastMCP) -> None:
             description="What the dev wants to build, e.g. 'transcribe Hindi voicemails'.",
         ),
     ) -> dict[str, Any]:
-        await ensure_auth(ctx)
         return _recommend(task_description)
 
     @mcp.tool(
@@ -105,7 +102,6 @@ def register(mcp: FastMCP) -> None:
             description="The draft request body the agent is about to send.",
         ),
     ) -> dict[str, Any]:
-        await ensure_auth(ctx)
         issues = _validate(endpoint, body)
         return {
             "endpoint": endpoint,

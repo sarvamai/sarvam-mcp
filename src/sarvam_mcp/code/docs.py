@@ -16,9 +16,7 @@ from typing import Any, Literal
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
-from sarvam_mcp.auth.elicit import ensure_auth
 from sarvam_mcp.code import _data
-
 
 # ---- Type literals -------------------------------------------------------
 
@@ -57,7 +55,6 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         endpoint: EndpointPath = Field(description="The Sarvam API path, e.g. '/text-to-speech'."),
     ) -> dict[str, Any]:
-        await ensure_auth(ctx)
         ref = _data.API_REFERENCE.get(endpoint)
         if not ref:
             return {
@@ -84,7 +81,6 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         api: ApiName = Field(description="Which Sarvam API. STT covers 23; TTS covers 11."),
     ) -> dict[str, Any]:
-        await ensure_auth(ctx)
         langs = _data.LANGUAGES_BY_API.get(api, [])
         return {
             "api": api,
@@ -104,7 +100,6 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         model: TtsModel = Field(default="bulbul:v3"),
     ) -> dict[str, Any]:
-        await ensure_auth(ctx)
         ids = _data.SPEAKERS_BY_MODEL.get(model, [])
         return {
             "model": model,
@@ -132,7 +127,6 @@ def register(mcp: FastMCP) -> None:
             description="Specific model id, e.g. 'bulbul:v3'. Omit to list all.",
         ),
     ) -> dict[str, Any]:
-        await ensure_auth(ctx)
         if model:
             entry = _data.PRICING.get(model)
             if not entry:
