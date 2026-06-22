@@ -34,3 +34,9 @@ class SarvamRateLimitError(SarvamAPIError):
 
 class SarvamBadRequestError(SarvamAPIError):
     """400 — caller-side validation problem."""
+
+
+class SarvamConnectionError(SarvamAPIError):
+    """Network-level failure (DNS, connection refused, timeout) — the request
+    never produced an HTTP response, even after retries. ``status_code`` is
+    ``None`` since no response was received."""

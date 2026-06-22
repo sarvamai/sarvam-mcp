@@ -19,6 +19,7 @@ from sarvam_mcp.http.errors import (
     SarvamAPIError,
     SarvamAuthError,
     SarvamBadRequestError,
+    SarvamConnectionError,
     SarvamRateLimitError,
 )
 from sarvam_mcp.http.retry import retry_async
@@ -190,6 +191,17 @@ class SarvamClient:
         except httpx.HTTPStatusError as exc:
             # Retries exhausted — fall through to typed error mapping below.
             response = exc.response
+        except httpx.TransportError as exc:
+            # Connection/DNS/timeout failure, never produced a response (even
+            # after retries). Map to a typed error so tools surface the same
+            # SarvamAPIError contract as HTTP failures instead of a raw httpx
+            # exception.
+            raise SarvamConnectionError(
+                f"Could not reach the Sarvam API ({type(exc).__name__}): {exc}",
+                status_code=None,
+                request_id=None,
+                body=None,
+            ) from exc
         metrics = metrics_from_response_headers(dict(response.headers))
         metrics.status_code = response.status_code
 

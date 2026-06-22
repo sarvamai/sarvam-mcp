@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import httpx
 import pytest
 
 from sarvam_mcp.http import (
     SarvamAPIError,
     SarvamAuthError,
     SarvamClient,
+    SarvamConnectionError,
     SarvamRateLimitError,
 )
 from sarvam_mcp.http.errors import SarvamBadRequestError
@@ -102,6 +104,32 @@ async def test_5xx_exhausts_retries(client, httpx_mock):
     with pytest.raises(SarvamAPIError) as exc_info:
         await client.post_json("/translate", json_body={"input": "x"})
     assert exc_info.value.status_code == 503
+
+
+async def test_transport_error_maps_to_connection_error(client, httpx_mock):
+    # A connection/DNS/timeout failure must surface as a typed error, not a
+    # raw httpx exception leaking out of the client.
+    for _ in range(3):  # retry_async runs at most 3 attempts.
+        httpx_mock.add_exception(httpx.ConnectError("connection refused"))
+
+    with pytest.raises(SarvamConnectionError) as exc_info:
+        await client.post_json("/translate", json_body={"input": "x"})
+
+    assert exc_info.value.status_code is None
+    assert "ConnectError" in str(exc_info.value)
+    # The originating httpx error is preserved on the chain.
+    assert isinstance(exc_info.value.__cause__, httpx.ConnectError)
+    assert len(httpx_mock.get_requests()) == 3
+
+
+async def test_connection_error_is_a_sarvam_api_error(client, httpx_mock):
+    # Subclass of SarvamAPIError so existing `except SarvamAPIError` handlers
+    # keep catching network failures.
+    for _ in range(3):
+        httpx_mock.add_exception(httpx.ReadTimeout("timed out"))
+
+    with pytest.raises(SarvamAPIError):
+        await client.post_json("/translate", json_body={"input": "x"})
 
 
 async def test_binary_response_returned_as_bytes(client, httpx_mock):
