@@ -63,6 +63,16 @@ def register(mcp: FastMCP) -> None:
             payload, call = await sc.client.post_json(CHAT_PATH, json_body=body)
             metrics.merge(call)
 
+        # stream=True makes the endpoint return text/event-stream, which the
+        # client surfaces as raw bytes. Fail clearly instead of crashing with
+        # "'bytes' object has no attribute 'get'".
+        if not isinstance(payload, dict):
+            raise RuntimeError(
+                f"Chat endpoint returned a non-JSON response ({type(payload).__name__}). "
+                "This tool returns a single completion and does not support streamed "
+                "responses — set stream=false (the default)."
+            )
+
         choice = (payload.get("choices") or [{}])[0]
         message = choice.get("message") or {}
         finish_reason = choice.get("finish_reason")
