@@ -75,12 +75,23 @@ src/sarvam_mcp/
 - Keep commits focused — one logical change per commit.
 - Use short, lowercase commit messages describing the change (e.g. `add pronunciation dictionary tools`).
 
+## Running the server locally
+
+Before opening a PR, run the MCP server locally to verify your changes work end-to-end:
+
+```bash
+mcp dev src/sarvam_mcp/server.py
+```
+
+This starts the server with the MCP Inspector so you can invoke tools interactively.
+
 ## Opening a PR
 
 1. Fork the repo and create a feature branch from `main`.
 2. Make your changes and ensure `pytest -q` passes.
 3. Run `ruff check . && ruff format --check .` to verify style.
-4. Push and open a PR against `main`.
+4. Run the server locally with `mcp dev` and verify your changes work.
+5. Push and open a PR against `main`.
 
 ## Releasing
 
