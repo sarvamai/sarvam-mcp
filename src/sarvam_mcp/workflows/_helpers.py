@@ -7,10 +7,13 @@ they exist to compose, not to reimplement.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import uuid
 from pathlib import Path
 from typing import Any
+
+import httpx
 
 from sarvam_mcp._registry import ServerContext
 from sarvam_mcp.audio import StoredAudio
@@ -143,3 +146,108 @@ async def llm_complete(
 def merge(metrics: ToolMetrics, call: CallMetrics) -> None:
     """Convenience re-export so workflow modules don't import observability directly."""
     metrics.merge(call)
+
+
+_BATCH_JOB_BASE = "/speech-to-text/job/v1"
+_BATCH_JOB_UPLOAD = f"{_BATCH_JOB_BASE}/upload-files"
+_BATCH_MAX_POLLS = 90
+_BATCH_POLL_INTERVAL = 2  # seconds
+
+
+async def stt_transcribe_diarized(
+    sc: ServerContext,
+    audio_path: Path,
+    *,
+    language_code: str = "unknown",
+    model: str = "saaras:v3",
+    num_speakers: int | None = None,
+    metrics: ToolMetrics | None = None,
+    ctx: Any = None,
+) -> tuple[str, list[dict[str, Any]], str | None]:
+    """Batch STT with diarization enabled.
+
+    Returns (flat_transcript, diarized_turns, detected_language_code).
+    ``diarized_turns`` is a list of per-speaker turn dicts from the API;
+    empty list when the API does not return diarization data.
+    """
+
+    async def _info(msg: str) -> None:
+        if ctx is not None:
+            await ctx.info(msg)
+
+    job_params: dict[str, Any] = {
+        "model": model,
+        "with_diarization": True,
+    }
+    if language_code != "unknown":
+        job_params["language_code"] = language_code
+    if num_speakers is not None:
+        job_params["num_speakers"] = num_speakers
+
+    await _info("Creating batch STT job…")
+    create_resp, call = await sc.client.post_json(_BATCH_JOB_BASE, json_body={"job_parameters": job_params})
+    if metrics is not None:
+        metrics.merge(call)
+    job_id = create_resp["job_id"]
+
+    await _info(f"Registering audio file for job {job_id}…")
+    upload_resp, call = await sc.client.post_json(
+        _BATCH_JOB_UPLOAD,
+        json_body={"job_id": job_id, "files": [audio_path.name]},
+    )
+    if metrics is not None:
+        metrics.merge(call)
+    upload_urls = upload_resp.get("upload_urls", {})
+    if not upload_urls:
+        raise RuntimeError(f"No upload URLs returned for job {job_id}")
+
+    await _info("Uploading audio to Azure Blob…")
+    file_details = next(iter(upload_urls.values()))
+    presigned_url = file_details["file_url"]
+    file_metadata = file_details.get("file_metadata") or {}
+    extra_headers = {str(k): str(v) for k, v in file_metadata.items()}
+    with audio_path.open("rb") as fh:
+        blob_call = await sc.client.put_blob(
+            presigned_url,
+            fh.read(),
+            content_type=_audio_mime(audio_path),
+            extra_headers=extra_headers,
+        )
+    if metrics is not None:
+        metrics.merge(blob_call)
+
+    await _info("Starting batch processing…")
+    _, call = await sc.client.post_json(
+        f"{_BATCH_JOB_BASE}/{job_id}/start",
+        json_body={"job_id": job_id, "job_parameters": job_params},
+    )
+    if metrics is not None:
+        metrics.merge(call)
+
+    await _info("Polling for completion…")
+    terminal = {"Completed", "PartiallyCompleted", "Failed", "failed", "error"}
+    status_resp: dict[str, Any] = {}
+    for _ in range(_BATCH_MAX_POLLS):
+        status_resp, call = await sc.client.get_json(f"{_BATCH_JOB_BASE}/{job_id}/status")
+        if metrics is not None:
+            metrics.merge(call)
+        if status_resp.get("job_state", "") in terminal:
+            break
+        await asyncio.sleep(_BATCH_POLL_INTERVAL)
+
+    result = status_resp.get("result") or {}
+    transcript = result.get("transcript") or status_resp.get("transcript") or ""
+    diarized: list[dict[str, Any]] = result.get("diarized_transcript") or []
+
+    if not transcript and status_resp.get("download_urls"):
+        dl_url = next(iter(status_resp["download_urls"].values()))["file_url"]
+        await _info("Downloading transcript…")
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as dl:
+            dl_resp = await dl.get(dl_url)
+        if dl_resp.is_success:
+            dl_body = dl_resp.json()
+            transcript = dl_body.get("transcript", "")
+            diarized = dl_body.get("diarized_transcript") or []
+            result = dl_body
+
+    return transcript, diarized, result.get("language_code")
