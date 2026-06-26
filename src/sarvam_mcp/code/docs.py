@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from fastmcp import Context, FastMCP
+from fastmcp import FastMCP
 from pydantic import Field
 
 from sarvam_mcp.code import _data
@@ -21,8 +21,14 @@ from sarvam_mcp.code import _data
 # ---- Type literals -------------------------------------------------------
 
 ApiName = Literal[
-    "stt", "stt_translate", "tts", "translate", "transliterate",
-    "lid", "llm", "vision",
+    "stt",
+    "stt_translate",
+    "tts",
+    "translate",
+    "transliterate",
+    "lid",
+    "llm",
+    "vision",
 ]
 EndpointPath = Literal[
     "/speech-to-text",
@@ -52,7 +58,6 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def sarvam_code_api_reference(
-        ctx: Context,
         endpoint: EndpointPath = Field(description="The Sarvam API path, e.g. '/text-to-speech'."),
     ) -> dict[str, Any]:
         ref = _data.API_REFERENCE.get(endpoint)
@@ -78,7 +83,6 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def sarvam_code_languages(
-        ctx: Context,
         api: ApiName = Field(description="Which Sarvam API. STT covers 23; TTS covers 11."),
     ) -> dict[str, Any]:
         langs = _data.LANGUAGES_BY_API.get(api, [])
@@ -97,17 +101,13 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def sarvam_code_speakers(
-        ctx: Context,
         model: TtsModel = Field(default="bulbul:v3"),
     ) -> dict[str, Any]:
         ids = _data.SPEAKERS_BY_MODEL.get(model, [])
         return {
             "model": model,
             "speaker_count": len(ids),
-            "speakers": [
-                {"id": s, "tone": _data.SPEAKER_HINTS.get(s, "")}
-                for s in ids
-            ],
+            "speakers": [{"id": s, "tone": _data.SPEAKER_HINTS.get(s, "")} for s in ids],
         }
 
     @mcp.tool(
@@ -121,7 +121,6 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def sarvam_code_pricing(
-        ctx: Context,
         model: str | None = Field(
             default=None,
             description="Specific model id, e.g. 'bulbul:v3'. Omit to list all.",

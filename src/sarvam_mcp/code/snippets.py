@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from fastmcp import Context, FastMCP
+from fastmcp import FastMCP
 from pydantic import Field
 
 from sarvam_mcp.code import _data
@@ -30,7 +30,6 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def sarvam_code_snippet(
-        ctx: Context,
         api: SnippetApi = Field(description="Which Sarvam API."),
         language: SnippetLanguage = Field(
             default="python",
@@ -68,7 +67,6 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def sarvam_code_recommend_model(
-        ctx: Context,
         task_description: str = Field(
             description="What the dev wants to build, e.g. 'transcribe Hindi voicemails'.",
         ),
@@ -87,7 +85,6 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def sarvam_code_validate_request(
-        ctx: Context,
         endpoint: Literal[
             "/text-to-speech",
             "/speech-to-text",
@@ -115,20 +112,20 @@ def register(mcp: FastMCP) -> None:
 # ---- recommendation heuristics --------------------------------------------
 
 _LANG_PATTERNS = {
-    "hi-IN":  r"\b(hindi|हिन्दी|hin)\b",
-    "ta-IN":  r"\b(tamil|தமிழ்|tam)\b",
-    "te-IN":  r"\b(telugu|తెలుగు|tel)\b",
-    "bn-IN":  r"\b(bengali|bangla|বাংলা|ben)\b",
-    "mr-IN":  r"\b(marathi|मराठी|mar)\b",
-    "gu-IN":  r"\b(gujarati|ગુજરાતી|guj)\b",
-    "kn-IN":  r"\b(kannada|ಕನ್ನಡ|kan)\b",
-    "ml-IN":  r"\b(malayalam|മലയാളം|mal)\b",
-    "pa-IN":  r"\b(punjabi|ਪੰਜਾਬੀ|pan)\b",
-    "od-IN":  r"\b(oriya|odia|ଓଡ଼ିଆ|ori)\b",
-    "ur-IN":  r"\b(urdu|اردو)\b",
-    "as-IN":  r"\b(assamese|asm)\b",
-    "ne-IN":  r"\b(nepali|nepalese|nep)\b",
-    "en-IN":  r"\b(english|eng)\b",
+    "hi-IN": r"\b(hindi|हिन्दी|hin)\b",
+    "ta-IN": r"\b(tamil|தமிழ்|tam)\b",
+    "te-IN": r"\b(telugu|తెలుగు|tel)\b",
+    "bn-IN": r"\b(bengali|bangla|বাংলা|ben)\b",
+    "mr-IN": r"\b(marathi|मराठी|mar)\b",
+    "gu-IN": r"\b(gujarati|ગુજરાતી|guj)\b",
+    "kn-IN": r"\b(kannada|ಕನ್ನಡ|kan)\b",
+    "ml-IN": r"\b(malayalam|മലയാളം|mal)\b",
+    "pa-IN": r"\b(punjabi|ਪੰਜਾਬੀ|pan)\b",
+    "od-IN": r"\b(oriya|odia|ଓଡ଼ିଆ|ori)\b",
+    "ur-IN": r"\b(urdu|اردو)\b",
+    "as-IN": r"\b(assamese|asm)\b",
+    "ne-IN": r"\b(nepali|nepalese|nep)\b",
+    "en-IN": r"\b(english|eng)\b",
 }
 
 
@@ -146,7 +143,9 @@ def _recommend(task: str) -> dict[str, Any]:
     detected_lang = _detect_language_code(t)
 
     # ---- speech in
-    if re.search(r"\b(transcrib\w*|stt|speech.{0,5}to.{0,5}text|voice ?memo|voicemail\w*|recording|audio file)\b", t):
+    if re.search(
+        r"\b(transcrib\w*|stt|speech.{0,5}to.{0,5}text|voice ?memo|voicemail\w*|recording|audio file)\b", t
+    ):
         if "english" in t or re.search(r"into english|to english", t):
             return _result(
                 model="saaras:v3",
@@ -178,14 +177,16 @@ def _recommend(task: str) -> dict[str, Any]:
             snippet_key=("tts", "python"),
             extras={
                 "default_speaker": "priya",
-                "tip_speakers":    "Call sarvam_code_speakers('bulbul:v3') for the full voice list with tone hints.",
+                "tip_speakers": "Call sarvam_code_speakers('bulbul:v3') for the full voice list with tone hints.",
             },
         )
 
     # ---- text translation
     if re.search(r"\btransla(te|ting)\b", t):
         # If 22-language coverage signal, pick sarvam-translate.
-        if re.search(r"\b(22|all indi(c|an) languages|all indian|kashmiri|sindhi|santali|bodo|maithili|dogri)\b", t):
+        if re.search(
+            r"\b(22|all indi(c|an) languages|all indian|kashmiri|sindhi|santali|bodo|maithili|dogri)\b", t
+        ):
             return _result(
                 model="sarvam-translate:v1",
                 endpoint="/translate",
@@ -213,7 +214,9 @@ def _recommend(task: str) -> dict[str, Any]:
         )
 
     # ---- chat / LLM / agent
-    if re.search(r"\b(chat|chatbot|llm|agent|generate text|reply|conversation|reasoning|reasoning agent)\b", t):
+    if re.search(
+        r"\b(chat|chatbot|llm|agent|generate text|reply|conversation|reasoning|reasoning agent)\b", t
+    ):
         # Bigger model when 'reasoning'/'tool use'/'flagship' signals appear.
         if re.search(r"\b(reasoning|complex|flagship|best|highest quality|tool use)\b", t):
             return _result(
@@ -317,24 +320,35 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
         if not body.get("target_language_code"):
             issues.append(_err("target_language_code", "Required."))
         elif body["target_language_code"] not in _TTS_LANG_CODES:
-            issues.append(_err(
-                "target_language_code",
-                f"'{body['target_language_code']}' not supported by TTS.",
-                "TTS covers 11 codes; call sarvam_code_languages('tts').",
-            ))
+            issues.append(
+                _err(
+                    "target_language_code",
+                    f"'{body['target_language_code']}' not supported by TTS.",
+                    "TTS covers 11 codes; call sarvam_code_languages('tts').",
+                )
+            )
         model = body.get("model", "bulbul:v3")
         if model not in _VALID_TTS_MODELS:
-            issues.append(_err("model", f"'{model}' invalid for TTS.",
-                               f"Use one of: {sorted(_VALID_TTS_MODELS)}"))
+            issues.append(
+                _err("model", f"'{model}' invalid for TTS.", f"Use one of: {sorted(_VALID_TTS_MODELS)}")
+            )
         speaker = body.get("speaker")
         if speaker and model in _data.SPEAKERS_BY_MODEL:
             allowed = _data.SPEAKERS_BY_MODEL[model]
             if speaker not in allowed:
-                fix = (f"Speakers compatible with {model}: "
-                       f"{', '.join(allowed[:8])}, … Call sarvam_code_speakers('{model}').")
+                fix = (
+                    f"Speakers compatible with {model}: "
+                    f"{', '.join(allowed[:8])}, … Call sarvam_code_speakers('{model}')."
+                )
                 issues.append(_err("speaker", f"'{speaker}' not compatible with {model}.", fix))
         if "speech_sample_rate" in body and body["speech_sample_rate"] not in (
-            8000, 16000, 22050, 24000, 32000, 44100, 48000
+            8000,
+            16000,
+            22050,
+            24000,
+            32000,
+            44100,
+            48000,
         ):
             issues.append(_err("speech_sample_rate", "Invalid sample rate."))
 
@@ -343,12 +357,10 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
             issues.append(_warn("file", "Required (multipart). Pass the audio file separately."))
         model = body.get("model", "saaras:v3")
         if model not in _VALID_STT_MODELS:
-            issues.append(_err("model", f"'{model}' invalid for STT.",
-                               "Use 'saaras:v3'."))
+            issues.append(_err("model", f"'{model}' invalid for STT.", "Use 'saaras:v3'."))
         mode = body.get("mode")
         if mode and mode not in _VALID_STT_MODES:
-            issues.append(_err("mode", f"'{mode}' invalid.",
-                               f"Valid modes: {sorted(_VALID_STT_MODES)}"))
+            issues.append(_err("mode", f"'{mode}' invalid.", f"Valid modes: {sorted(_VALID_STT_MODES)}"))
         lc = body.get("language_code", "unknown")
         if lc not in _VALID_LANGUAGE_CODES:
             issues.append(_err("language_code", f"Unknown code '{lc}'."))
@@ -356,8 +368,7 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
     elif endpoint == "/speech-to-text-translate":
         model = body.get("model", "saaras:v3")
         if model not in _VALID_SAARAS_MODELS:
-            issues.append(_err("model", f"'{model}' invalid.",
-                               f"Use one of: {sorted(_VALID_SAARAS_MODELS)}"))
+            issues.append(_err("model", f"'{model}' invalid.", f"Use one of: {sorted(_VALID_SAARAS_MODELS)}"))
 
     elif endpoint == "/translate":
         for f in ("input", "source_language_code", "target_language_code"):
@@ -369,19 +380,28 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
                 issues.append(_err(f, f"Unknown language code '{v}'."))
         model = body.get("model", "mayura:v1")
         if model not in _VALID_TRANSLATE_MODELS:
-            issues.append(_err("model", f"'{model}' invalid for translate.",
-                               f"Use one of: {sorted(_VALID_TRANSLATE_MODELS)}"))
+            issues.append(
+                _err(
+                    "model",
+                    f"'{model}' invalid for translate.",
+                    f"Use one of: {sorted(_VALID_TRANSLATE_MODELS)}",
+                )
+            )
         if model == "sarvam-translate:v1" and body.get("mode"):
-            issues.append(_warn("mode", "Sarvam-Translate v1 ignores `mode` — formal only.",
-                                "Drop the field or switch to mayura:v1 if you need modes."))
+            issues.append(
+                _warn(
+                    "mode",
+                    "Sarvam-Translate v1 ignores `mode` — formal only.",
+                    "Drop the field or switch to mayura:v1 if you need modes.",
+                )
+            )
 
     elif endpoint == "/v1/chat/completions":
         if not body.get("messages"):
             issues.append(_err("messages", "Required."))
         model = body.get("model", "sarvam-30b")
         if model not in _VALID_LLM_MODELS:
-            issues.append(_err("model", f"'{model}' invalid.",
-                               f"Valid: {sorted(_VALID_LLM_MODELS)}"))
+            issues.append(_err("model", f"'{model}' invalid.", f"Valid: {sorted(_VALID_LLM_MODELS)}"))
         t = body.get("temperature")
         if t is not None and not (0.0 <= t <= 2.0):
             issues.append(_err("temperature", "Must be between 0.0 and 2.0."))
@@ -401,15 +421,21 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
                 missing = {"id", "text", "type"} - set(q.keys())
                 if missing:
                     for mf in sorted(missing):
-                        issues.append(_err(
-                            f"questions[{i}].{mf}",
-                            f"Missing required field '{mf}'.",
-                            "Each question needs id, text, type.",
-                        ))
+                        issues.append(
+                            _err(
+                                f"questions[{i}].{mf}",
+                                f"Missing required field '{mf}'.",
+                                "Each question needs id, text, type.",
+                            )
+                        )
                 if q.get("type") and q["type"] not in valid_types:
-                    issues.append(_err(f"questions[{i}].type",
-                                       f"Invalid type '{q['type']}'.",
-                                       f"Allowed: {sorted(valid_types)}"))
+                    issues.append(
+                        _err(
+                            f"questions[{i}].type",
+                            f"Invalid type '{q['type']}'.",
+                            f"Allowed: {sorted(valid_types)}",
+                        )
+                    )
 
     elif endpoint == "/text-lid":
         if not body.get("input"):
