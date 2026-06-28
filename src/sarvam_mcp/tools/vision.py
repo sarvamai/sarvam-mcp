@@ -83,7 +83,7 @@ def register(mcp: FastMCP) -> None:
                 await ctx.info("Creating Document Intelligence job…")
                 create_body: dict[str, Any] = {
                     "job_parameters": {
-                        "language": language_code if language_code != "unknown" else "hi-IN",
+                        "language": language_code if language_code not in ("auto", "unknown") else "hi-IN",
                         "output_format": output_format,
                     },
                 }
