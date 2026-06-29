@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       );
     }
 
-    emitToolUsed(body as ToolEvent);
+    await emitToolUsed(body as ToolEvent);
   } catch {
     // Swallow all errors — tracking must never block callers.
   }

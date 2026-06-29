@@ -7,7 +7,9 @@ Tools call ``client.post_json(...)``, ``client.post_multipart(...)``, or
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from typing import Any
@@ -15,6 +17,7 @@ from typing import Any
 import httpx
 
 from sarvam_mcp import __version__
+from sarvam_mcp.analytics import current_trace_context, new_span_id, track_span
 from sarvam_mcp.auth.context import current_auth
 from sarvam_mcp.http.errors import (
     SarvamAPIError,
@@ -45,6 +48,10 @@ class SarvamClient:
             timeout=timeout,
             headers={"User-Agent": USER_AGENT},
         )
+        self._upstream_lock = asyncio.Lock()
+        self._upstream_inflight_total = 0
+        self._upstream_inflight_by_endpoint: dict[str, int] = {}
+        self._upstream_max_inflight_seen = 0
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -120,13 +127,52 @@ class SarvamClient:
         if extra_headers:
             headers.update(extra_headers)
 
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout)
-        ) as blob_client:
-            response = await blob_client.put(url, content=content, headers=headers)
+        trace_ctx = current_trace_context()
+        start_ns = time.time_ns()
+        start_concurrency = await self._enter_upstream("presigned-blob-url")
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(timeout)
+            ) as blob_client:
+                response = await blob_client.put(url, content=content, headers=headers)
+        except Exception as exc:
+            finish_concurrency = await self._exit_upstream("presigned-blob-url")
+            if trace_ctx is not None:
+                _track_upstream_span(
+                    trace_ctx,
+                    span_name="PUT blob upload",
+                    method="PUT",
+                    path="presigned-blob-url",
+                    status="error",
+                    start_ns=start_ns,
+                    attributes={
+                        "error.type": type(exc).__name__,
+                        "net.peer.name": "presigned-blob-url",
+                        **start_concurrency,
+                        **finish_concurrency,
+                    },
+                )
+            raise
 
         metrics = CallMetrics()
         metrics.status_code = response.status_code
+        finish_concurrency = await self._exit_upstream("presigned-blob-url")
+        if trace_ctx is not None:
+            _track_upstream_span(
+                trace_ctx,
+                span_name="PUT blob upload",
+                method="PUT",
+                path="presigned-blob-url",
+                status="ok" if response.is_success else "error",
+                start_ns=start_ns,
+                status_code=response.status_code,
+                attributes={
+                    "http.request_content_length": len(content),
+                    "net.peer.name": "presigned-blob-url",
+                    **start_concurrency,
+                    **finish_concurrency,
+                },
+            )
         if not response.is_success:
             raise SarvamAPIError(
                 f"Blob upload failed ({response.status_code}): "
@@ -172,8 +218,14 @@ class SarvamClient:
     ) -> tuple[Any, CallMetrics]:
         provider = current_auth()
         auth_headers = await provider.headers(scope=scope)
+        trace_ctx = current_trace_context()
+        start_ns = time.time_ns()
+        start_concurrency = await self._enter_upstream(path)
+        attempts_made = 0
 
         async def send() -> httpx.Response:
+            nonlocal attempts_made
+            attempts_made += 1
             resp = await self._client.request(
                 method,
                 path,
@@ -198,6 +250,22 @@ class SarvamClient:
             # after retries). Map to a typed error so tools surface the same
             # SarvamAPIError contract as HTTP failures instead of a raw httpx
             # exception.
+            finish_concurrency = await self._exit_upstream(path)
+            if trace_ctx is not None:
+                _track_upstream_span(
+                    trace_ctx,
+                    span_name=f"{method} {path}",
+                    method=method,
+                    path=path,
+                    status="error",
+                    start_ns=start_ns,
+                    attributes={
+                        "error.type": type(exc).__name__,
+                        "http.retry_count": max(0, attempts_made - 1),
+                        **start_concurrency,
+                        **finish_concurrency,
+                    },
+                )
             raise SarvamConnectionError(
                 f"Could not reach the Sarvam API ({type(exc).__name__}): {exc}",
                 status_code=None,
@@ -206,6 +274,29 @@ class SarvamClient:
             ) from exc
         metrics = metrics_from_response_headers(dict(response.headers))
         metrics.status_code = response.status_code
+        finish_concurrency = await self._exit_upstream(path)
+        extra_span_attrs: dict[str, Any] = {
+            "http.retry_count": max(0, attempts_made - 1),
+            **start_concurrency,
+            **finish_concurrency,
+        }
+        if response.status_code == 429:
+            retry_after = _maybe_float(response.headers.get("retry-after"))
+            if retry_after is not None:
+                extra_span_attrs["http.retry_after_seconds"] = retry_after
+            extra_span_attrs["mcp.error_category"] = "rate_limit"
+        if trace_ctx is not None:
+            _track_upstream_span(
+                trace_ctx,
+                span_name=f"{method} {path}",
+                method=method,
+                path=path,
+                status="ok" if response.is_success else "error",
+                start_ns=start_ns,
+                status_code=response.status_code,
+                metrics=metrics,
+                attributes=extra_span_attrs,
+            )
 
         if response.is_success:
             content_type = response.headers.get("content-type", "")
@@ -237,6 +328,34 @@ class SarvamClient:
             raise SarvamRateLimitError(message, retry_after=retry_after, **kwargs)
         raise SarvamAPIError(message, **kwargs)
 
+    async def _enter_upstream(self, endpoint: str) -> dict[str, int]:
+        async with self._upstream_lock:
+            self._upstream_inflight_total += 1
+            self._upstream_inflight_by_endpoint[endpoint] = (
+                self._upstream_inflight_by_endpoint.get(endpoint, 0) + 1
+            )
+            self._upstream_max_inflight_seen = max(
+                self._upstream_max_inflight_seen,
+                self._upstream_inflight_total,
+            )
+            return {
+                "mcp.concurrent.upstream_total_at_start": self._upstream_inflight_total,
+                "mcp.concurrent.upstream_endpoint_at_start": self._upstream_inflight_by_endpoint[endpoint],
+                "mcp.concurrent.upstream_max_seen": self._upstream_max_inflight_seen,
+            }
+
+    async def _exit_upstream(self, endpoint: str) -> dict[str, int]:
+        async with self._upstream_lock:
+            self._upstream_inflight_total = max(0, self._upstream_inflight_total - 1)
+            self._upstream_inflight_by_endpoint[endpoint] = max(
+                0,
+                self._upstream_inflight_by_endpoint.get(endpoint, 1) - 1,
+            )
+            return {
+                "mcp.concurrent.upstream_total_at_finish": self._upstream_inflight_total,
+                "mcp.concurrent.upstream_endpoint_at_finish": self._upstream_inflight_by_endpoint[endpoint],
+            }
+
 
 def _extract_error_message(body_text: str) -> str | None:
     if not body_text:
@@ -264,3 +383,47 @@ def _maybe_float(raw: str | None) -> float | None:
         return float(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _track_upstream_span(
+    trace_ctx,
+    *,
+    span_name: str,
+    method: str,
+    path: str,
+    status: str,
+    start_ns: int,
+    status_code: int | None = None,
+    metrics: CallMetrics | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> None:
+    span_attributes: dict[str, Any] = {
+        "http.request.method": method,
+        "url.path": path,
+        "sarvam.endpoint": path,
+        "sarvam.latency_ms": round((time.time_ns() - start_ns) / 1_000_000, 1),
+    }
+    if status_code is not None:
+        span_attributes["http.response.status_code"] = status_code
+    if metrics is not None:
+        if metrics.request_id:
+            span_attributes["sarvam.request_id"] = metrics.request_id
+        if metrics.cost_credits is not None:
+            span_attributes["sarvam.cost_credits"] = metrics.cost_credits
+        if metrics.quota_remaining is not None:
+            span_attributes["sarvam.quota_remaining"] = metrics.quota_remaining
+    if attributes:
+        span_attributes.update(attributes)
+
+    track_span(
+        trace_id=trace_ctx.trace_id,
+        span_id=new_span_id(),
+        parent_span_id=trace_ctx.root_span_id,
+        tool_name=trace_ctx.tool_name,
+        span_name=span_name,
+        span_kind="client",
+        status=status,
+        start_time_unix_nano=start_ns,
+        end_time_unix_nano=time.time_ns(),
+        attributes=span_attributes,
+    )

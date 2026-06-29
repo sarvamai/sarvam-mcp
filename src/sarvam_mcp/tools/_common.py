@@ -60,8 +60,8 @@ async def resolve_file_input(
     if filename:
         suffix = Path(filename).suffix or ""
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    tmp_path = Path(tmp.name)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp_path = Path(tmp.name)
     try:
         if file_base64 is not None:
             data = base64.b64decode(file_base64)
@@ -69,13 +69,15 @@ async def resolve_file_input(
                 raise ValueError(
                     f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
                 )
-            tmp.write(data)
-            tmp.close()
+            tmp_path.write_bytes(data)
             yield tmp_path
         else:
             assert file_url is not None
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-                async with client.stream("GET", file_url) as resp:
+            with tmp_path.open("wb") as tmp_fh:
+                async with (
+                    httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client,
+                    client.stream("GET", file_url) as resp,
+                ):
                     resp.raise_for_status()
                     downloaded = 0
                     async for chunk in resp.aiter_bytes(chunk_size=65536):
@@ -84,8 +86,7 @@ async def resolve_file_input(
                             raise ValueError(
                                 f"Downloaded file exceeds {max_bytes} byte limit."
                             )
-                        tmp.write(chunk)
-            tmp.close()
+                        tmp_fh.write(chunk)
             yield tmp_path
     finally:
         tmp_path.unlink(missing_ok=True)

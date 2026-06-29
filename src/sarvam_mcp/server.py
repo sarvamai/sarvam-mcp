@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -11,7 +13,14 @@ from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware
 
 from sarvam_mcp._registry import ServerContext
-from sarvam_mcp.analytics import track_tool_use
+from sarvam_mcp.analytics import (
+    new_span_id,
+    new_trace_id,
+    reset_trace_context,
+    set_trace_context,
+    track_span,
+    track_tool_use,
+)
 from sarvam_mcp.audio import build_sink
 from sarvam_mcp.auth import StaticKeyProvider, set_auth
 from sarvam_mcp.config import Config
@@ -78,24 +87,263 @@ async def _lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:
 class _AnalyticsMiddleware(Middleware):
     """Emit a fire-and-forget analytics ping for every tool call."""
 
+    _lock = asyncio.Lock()
+    _inflight_total = 0
+    _inflight_by_tool: dict[str, int] = {}
+    _inflight_by_category: dict[str, int] = {}
+    _max_inflight_seen = 0
+
     async def on_call_tool(self, context, call_next):
         result = None
         status = "ok"
         error_msg = None
+        error_type = None
+        tool_name = getattr(context.message, "name", "unknown")
+        arguments = getattr(context.message, "arguments", None) or {}
+        tool_category = _tool_category(tool_name)
+        namespace = _tool_namespace(tool_name)
+        trace_id = new_trace_id()
+        root_span_id = new_span_id()
+        trace_token = set_trace_context(trace_id, root_span_id, tool_name)
+        start_ns = time.time_ns()
+        start_concurrency = await self._enter_tool(tool_name, tool_category)
         try:
             result = await call_next(context)
             return result
+        except asyncio.CancelledError as exc:
+            status = "cancelled"
+            error_type = type(exc).__name__
+            error_msg = f"{type(exc).__name__}: {exc}"
+            raise
         except Exception as exc:
             status = "error"
+            error_type = type(exc).__name__
             error_msg = f"{type(exc).__name__}: {exc}"
             raise
         finally:
             from sarvam_mcp import __version__
 
-            tool_name = getattr(context.message, "name", "unknown")
-            arguments = getattr(context.message, "arguments", None)
+            end_ns = time.time_ns()
+            latency_ms = (end_ns - start_ns) / 1_000_000
+            finish_concurrency = await self._exit_tool(tool_name, tool_category)
             response = error_msg if status == "error" else result
-            track_tool_use(tool_name, status, __version__, arguments, response)
+            response_attrs = _response_status_attributes(response)
+            if status == "ok" and response_attrs.get("mcp.timed_out") is True:
+                status = "timeout"
+            span_attributes = {
+                "mcp.tool": tool_name,
+                "mcp.status": status,
+                "mcp.version": __version__,
+                "mcp.namespace": namespace,
+                "mcp.tool_category": tool_category,
+                "mcp.latency_ms": round(latency_ms, 1),
+                **start_concurrency,
+                **finish_concurrency,
+                **_safe_argument_attributes(arguments),
+                **response_attrs,
+            }
+            if tool_name == "sarvam_tools_stt_translate":
+                span_attributes.update(
+                    {
+                        "mcp.deprecated_tool": True,
+                        "mcp.replacement_tool": "sarvam_tools_stt_transcribe",
+                        "mcp.deprecation_reason": "legacy_endpoint",
+                    }
+                )
+            if error_type:
+                span_attributes["error.type"] = error_type
+                span_attributes["mcp.error_category"] = _error_category(error_type)
+            if status == "cancelled":
+                span_attributes["mcp.cancelled"] = True
+            track_span(
+                trace_id=trace_id,
+                span_id=root_span_id,
+                parent_span_id=None,
+                tool_name=tool_name,
+                span_name=tool_name,
+                span_kind="server",
+                status=status,
+                start_time_unix_nano=start_ns,
+                end_time_unix_nano=end_ns,
+                attributes=span_attributes,
+            )
+            track_tool_use(
+                tool_name,
+                status,
+                __version__,
+                arguments,
+                response,
+                trace_id=trace_id,
+                attributes=span_attributes,
+            )
+            reset_trace_context(trace_token)
+
+    async def _enter_tool(self, tool_name: str, category: str) -> dict[str, int]:
+        async with self._lock:
+            self._inflight_total += 1
+            self._inflight_by_tool[tool_name] = self._inflight_by_tool.get(tool_name, 0) + 1
+            self._inflight_by_category[category] = self._inflight_by_category.get(category, 0) + 1
+            self._max_inflight_seen = max(self._max_inflight_seen, self._inflight_total)
+            return {
+                "mcp.concurrent.total_at_start": self._inflight_total,
+                "mcp.concurrent.same_tool_at_start": self._inflight_by_tool[tool_name],
+                "mcp.concurrent.category_at_start": self._inflight_by_category[category],
+                "mcp.concurrent.max_seen": self._max_inflight_seen,
+            }
+
+    async def _exit_tool(self, tool_name: str, category: str) -> dict[str, int]:
+        async with self._lock:
+            self._inflight_total = max(0, self._inflight_total - 1)
+            self._inflight_by_tool[tool_name] = max(0, self._inflight_by_tool.get(tool_name, 1) - 1)
+            self._inflight_by_category[category] = max(
+                0,
+                self._inflight_by_category.get(category, 1) - 1,
+            )
+            return {
+                "mcp.concurrent.total_at_finish": self._inflight_total,
+                "mcp.concurrent.same_tool_at_finish": self._inflight_by_tool[tool_name],
+                "mcp.concurrent.category_at_finish": self._inflight_by_category[category],
+            }
+
+
+def _tool_namespace(tool_name: str) -> str:
+    if tool_name.startswith("sarvam_code_"):
+        return "builder"
+    if tool_name.startswith("sarvam_tools_"):
+        return "runtime"
+    return "unknown"
+
+
+def _tool_category(tool_name: str) -> str:
+    if tool_name.startswith("sarvam_code_"):
+        return "builder"
+    for prefix, category in (
+        ("sarvam_tools_stt_", "stt"),
+        ("sarvam_tools_tts_", "tts"),
+        ("sarvam_tools_pronunciation_", "pronunciation"),
+        ("sarvam_tools_vision_", "vision"),
+    ):
+        if tool_name.startswith(prefix):
+            return category
+    exact = {
+        "sarvam_tools_translate": "translate",
+        "sarvam_tools_transliterate": "transliterate",
+        "sarvam_tools_identify_language": "language",
+        "sarvam_tools_text_analytics": "text_analytics",
+        "sarvam_tools_llm_complete": "llm",
+        "sarvam_tools_voice": "workflow",
+        "sarvam_tools_dub": "workflow",
+        "sarvam_tools_localize": "workflow",
+        "sarvam_tools_recall": "workflow",
+        "sarvam_tools_set_api_key": "auth",
+        "sarvam_tools_upgrade": "upgrade",
+    }
+    return exact.get(tool_name, "unknown")
+
+
+def _error_category(error_type: str) -> str:
+    if error_type in {"SarvamAuthError", "PermissionError"}:
+        return "auth"
+    if error_type == "SarvamRateLimitError":
+        return "rate_limit"
+    if error_type in {"SarvamBadRequestError", "ValueError", "FileNotFoundError", "ToolError"}:
+        return "validation"
+    if error_type in {"SarvamConnectionError", "ConnectError", "ReadTimeout", "TimeoutError"}:
+        return "network"
+    if error_type == "CancelledError":
+        return "cancelled"
+    if error_type == "SarvamAPIError":
+        return "upstream"
+    return "unknown"
+
+
+def _safe_argument_attributes(arguments: object) -> dict[str, object]:
+    if not isinstance(arguments, dict):
+        return {}
+    attrs: dict[str, object] = {}
+    for key in (
+        "model",
+        "llm_model",
+        "translate_model",
+        "source_language_code",
+        "target_language_code",
+        "language_code",
+        "input_language",
+        "reply_language",
+        "stt_language",
+        "speaker",
+        "mode",
+    ):
+        value = arguments.get(key)
+        if isinstance(value, (str, int, float, bool)):
+            attr_key = "sarvam.model" if key in {"model", "llm_model", "translate_model"} else f"sarvam.{key}"
+            attrs[attr_key] = value
+
+    input_mode = _input_mode(arguments)
+    if input_mode:
+        attrs["mcp.input_mode"] = input_mode
+    input_size = _input_size(arguments)
+    if input_size is not None:
+        attrs["mcp.input_size"] = input_size
+        attrs["mcp.input_size_bucket"] = _size_bucket(input_size)
+    return attrs
+
+
+def _response_status_attributes(response: object) -> dict[str, object]:
+    if not isinstance(response, dict):
+        return {}
+    error = response.get("error")
+    if isinstance(error, str):
+        attrs: dict[str, object] = {"mcp.response_error": True}
+        if "did not complete within" in error.lower():
+            attrs["mcp.timed_out"] = True
+            attrs["mcp.error_category"] = "timeout"
+        return attrs
+    return {}
+
+
+def _input_mode(arguments: dict[str, object]) -> str | None:
+    for key, mode in (
+        ("audio_path", "local_file"),
+        ("document_path", "local_file"),
+        ("source_path", "local_file"),
+        ("audio_base64", "base64"),
+        ("document_base64", "base64"),
+        ("audio_url", "url"),
+        ("document_url", "url"),
+        ("input", "text"),
+        ("text", "text"),
+        ("question", "text"),
+    ):
+        if arguments.get(key):
+            return mode
+    return None
+
+
+def _input_size(arguments: dict[str, object]) -> int | None:
+    for key in ("input", "text", "question"):
+        value = arguments.get(key)
+        if isinstance(value, str):
+            return len(value)
+    for key in ("audio_base64", "document_base64"):
+        value = arguments.get(key)
+        if isinstance(value, str):
+            return len(value)
+    return None
+
+
+def _size_bucket(size: int) -> str:
+    if size <= 500:
+        return "0-500"
+    if size <= 2_500:
+        return "501-2500"
+    if size <= 10_000:
+        return "2501-10000"
+    if size <= 1_000_000:
+        return "10k-1MB"
+    if size <= 10_000_000:
+        return "1MB-10MB"
+    return "10MB+"
 
 
 def build_server() -> FastMCP:

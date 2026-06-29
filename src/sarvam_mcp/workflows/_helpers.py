@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from sarvam_mcp._registry import ServerContext
+from sarvam_mcp.analytics import workflow_span
 from sarvam_mcp.audio import StoredAudio
 from sarvam_mcp.observability import CallMetrics, ToolMetrics
 from sarvam_mcp.tools._common import SarvamLLM
@@ -40,16 +41,20 @@ async def stt_transcribe(
     metrics: ToolMetrics | None = None,
 ) -> tuple[str, str | None]:
     """Run STT, returning (transcript, detected_language)."""
-    audio_bytes = await asyncio.to_thread(audio_path.read_bytes)
-    files = {"file": (audio_path.name, audio_bytes, _audio_mime(audio_path))}
-    data: dict[str, Any] = {
-        "model": model,
-        "language_code": language_code,
-        "with_timestamps": "false",
-    }
-    if model == "saaras:v3":
-        data["mode"] = mode
-    body, call = await sc.client.post_multipart("/speech-to-text", data=data, files=files)
+    with workflow_span(
+        "workflow.stt",
+        attributes={"sarvam.model": model, "sarvam.language_code": language_code, "sarvam.mode": mode},
+    ):
+        audio_bytes = await asyncio.to_thread(audio_path.read_bytes)
+        files = {"file": (audio_path.name, audio_bytes, _audio_mime(audio_path))}
+        data: dict[str, Any] = {
+            "model": model,
+            "language_code": language_code,
+            "with_timestamps": "false",
+        }
+        if model == "saaras:v3":
+            data["mode"] = mode
+        body, call = await sc.client.post_multipart("/speech-to-text", data=data, files=files)
     if metrics is not None:
         metrics.merge(call)
     return body.get("transcript", ""), body.get("language_code")
@@ -66,18 +71,28 @@ async def translate_text(
     metrics: ToolMetrics | None = None,
 ) -> str:
     """Translate ``text`` and return the translated string."""
-    # Upstream /translate accepts "auto", not "unknown".
-    src = "auto" if source_language_code == "unknown" else source_language_code
-    body_req: dict[str, Any] = {
-        "input": text,
-        "source_language_code": src,
-        "target_language_code": target_language_code,
-        "model": model,
-        "numerals_format": "international",
-    }
-    if model == "mayura:v1":
-        body_req["mode"] = mode
-    body, call = await sc.client.post_json("/translate", json_body=body_req)
+    with workflow_span(
+        "workflow.translate",
+        attributes={
+            "sarvam.model": model,
+            "sarvam.source_language_code": source_language_code,
+            "sarvam.target_language_code": target_language_code,
+            "sarvam.mode": mode,
+            "mcp.input_size": len(text),
+        },
+    ):
+        # Upstream /translate accepts "auto", not "unknown".
+        src = "auto" if source_language_code == "unknown" else source_language_code
+        body_req: dict[str, Any] = {
+            "input": text,
+            "source_language_code": src,
+            "target_language_code": target_language_code,
+            "model": model,
+            "numerals_format": "international",
+        }
+        if model == "mayura:v1":
+            body_req["mode"] = mode
+        body, call = await sc.client.post_json("/translate", json_body=body_req)
     if metrics is not None:
         metrics.merge(call)
     return body.get("translated_text", "")
@@ -95,25 +110,35 @@ async def tts_synthesize(
     metrics: ToolMetrics | None = None,
 ) -> StoredAudio:
     """Run TTS and persist via the configured audio sink."""
-    body, call = await sc.client.post_json(
-        "/text-to-speech",
-        json_body={
-            "inputs": [text],
-            "target_language_code": target_language_code,
-            "speaker": speaker,
-            "speech_sample_rate": speech_sample_rate,
-            "model": model,
-            "enable_preprocessing": True,
+    with workflow_span(
+        "workflow.tts",
+        attributes={
+            "sarvam.model": model,
+            "sarvam.target_language_code": target_language_code,
+            "sarvam.speaker": speaker,
+            "mcp.input_size": len(text),
         },
-    )
-    if metrics is not None:
-        metrics.merge(call)
-    audios = body.get("audios") or []
-    if not audios:
-        raise RuntimeError(f"TTS returned no audio. Raw: {body!r}")
-    wav = base64.b64decode(audios[0])
+    ):
+        body, call = await sc.client.post_json(
+            "/text-to-speech",
+            json_body={
+                "inputs": [text],
+                "target_language_code": target_language_code,
+                "speaker": speaker,
+                "speech_sample_rate": speech_sample_rate,
+                "model": model,
+                "enable_preprocessing": True,
+            },
+        )
+        if metrics is not None:
+            metrics.merge(call)
+        audios = body.get("audios") or []
+        if not audios:
+            raise RuntimeError(f"TTS returned no audio. Raw: {body!r}")
+        wav = base64.b64decode(audios[0])
     filename = f"{filename_prefix}-{uuid.uuid4().hex[:8]}.wav"
-    return await sc.audio_sink.store(wav, filename=filename, mime_type="audio/wav")
+    with workflow_span("workflow.audio_store", attributes={"mcp.output_size_bytes": len(wav)}):
+        return await sc.audio_sink.store(wav, filename=filename, mime_type="audio/wav")
 
 
 async def llm_complete(
@@ -126,15 +151,19 @@ async def llm_complete(
     metrics: ToolMetrics | None = None,
 ) -> str:
     """Run a chat completion and return the assistant text."""
-    body, call = await sc.client.post_json(
-        "/v1/chat/completions",
-        json_body={
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        },
-    )
+    with workflow_span(
+        "workflow.llm",
+        attributes={"sarvam.model": model, "mcp.message_count": len(messages)},
+    ):
+        body, call = await sc.client.post_json(
+            "/v1/chat/completions",
+            json_body={
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+        )
     if metrics is not None:
         metrics.merge(call)
     choice = (body.get("choices") or [{}])[0]

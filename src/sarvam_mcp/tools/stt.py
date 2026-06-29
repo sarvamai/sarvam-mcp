@@ -10,6 +10,7 @@ import httpx
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
+from sarvam_mcp.analytics import workflow_span
 from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
 
@@ -298,28 +299,40 @@ def register(mcp: FastMCP) -> None:
                 await ctx.info("Polling for completion…")
                 terminal_states = {"Completed", "PartiallyCompleted", "Failed", "failed", "error"}
                 status_resp: dict[str, Any] = {}
-                for attempt in range(MAX_POLL_ATTEMPTS):
-                    status_resp, call = await sc.client.get_json(
-                        f"{STT_JOB_BASE}/{job_id}/status"
-                    )
-                    metrics.merge(call)
-                    job_state = status_resp.get("job_state", "")
-                    if job_state in terminal_states:
-                        break
-                    if (attempt + 1) % 5 == 0:
-                        await ctx.report_progress(attempt + 1, MAX_POLL_ATTEMPTS)
-                    await asyncio.sleep(POLL_INTERVAL_SECONDS)
-                else:
-                    return {
-                        "job_id": job_id,
-                        "job_state": status_resp.get("job_state", "timeout"),
-                        "error": (
-                            f"Job did not complete within "
-                            f"{MAX_POLL_ATTEMPTS * POLL_INTERVAL_SECONDS}s. "
-                            f"Poll manually with sarvam_tools_stt_batch_status."
-                        ),
-                        "observability": metrics.to_response_block(),
-                    }
+                poll_attrs: dict[str, Any] = {
+                    "mcp.job_id": job_id,
+                    "mcp.poll_interval_seconds": POLL_INTERVAL_SECONDS,
+                    "mcp.poll_max_attempts": MAX_POLL_ATTEMPTS,
+                    "mcp.poll_attempt_count": 0,
+                    "mcp.poll_timed_out": False,
+                }
+                with workflow_span("stt_batch.poll_status", attributes=poll_attrs):
+                    for attempt in range(MAX_POLL_ATTEMPTS):
+                        status_resp, call = await sc.client.get_json(
+                            f"{STT_JOB_BASE}/{job_id}/status"
+                        )
+                        metrics.merge(call)
+                        poll_attrs["mcp.poll_attempt_count"] = attempt + 1
+                        job_state = status_resp.get("job_state", "")
+                        poll_attrs["mcp.job_state"] = job_state
+                        if job_state in terminal_states:
+                            break
+                        if (attempt + 1) % 5 == 0:
+                            await ctx.report_progress(attempt + 1, MAX_POLL_ATTEMPTS)
+                        await asyncio.sleep(POLL_INTERVAL_SECONDS)
+                    else:
+                        poll_attrs["mcp.poll_timed_out"] = True
+                        poll_attrs["mcp.job_state"] = status_resp.get("job_state", "timeout")
+                        return {
+                            "job_id": job_id,
+                            "job_state": status_resp.get("job_state", "timeout"),
+                            "error": (
+                                f"Job did not complete within "
+                                f"{MAX_POLL_ATTEMPTS * POLL_INTERVAL_SECONDS}s. "
+                                f"Poll manually with sarvam_tools_stt_batch_status."
+                            ),
+                            "observability": metrics.to_response_block(),
+                        }
 
                 # Step 6: Extract transcript
                 result = status_resp.get("result") or {}

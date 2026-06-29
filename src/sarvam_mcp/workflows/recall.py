@@ -15,6 +15,7 @@ from typing import Any
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
+from sarvam_mcp.analytics import workflow_span
 from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import LanguageCode, SarvamLLM, ready_ctx
 from sarvam_mcp.workflows._helpers import llm_complete, stt_transcribe
@@ -72,40 +73,41 @@ def register(mcp: FastMCP) -> None:
         with measure_tool() as metrics:
             chunks: list[str] = []
             running = 0
-            for file_path in files:
-                if running >= MAX_CHARS:
-                    sources.append({"path": str(file_path), "skipped": "max chars reached"})
-                    continue
-                if file_path.suffix.lower() in AUDIO_EXTS:
-                    await ctx.info(f"Transcribing {file_path.name}…")
-                    transcript, detected = await stt_transcribe(
-                        sc, file_path, language_code=stt_language, metrics=metrics
-                    )
-                    text = transcript or ""
-                    sources.append(
-                        {
-                            "path": str(file_path),
-                            "kind": "audio",
-                            "language_code": detected,
-                            "chars": len(text),
-                        }
-                    )
-                else:
-                    try:
-                        text = await asyncio.to_thread(file_path.read_text, errors="ignore")
-                    except Exception as exc:  # noqa: BLE001
-                        sources.append({"path": str(file_path), "error": repr(exc)})
+            with workflow_span("recall.index_files", attributes={"mcp.files_count": len(files)}):
+                for file_path in files:
+                    if running >= MAX_CHARS:
+                        sources.append({"path": str(file_path), "skipped": "max chars reached"})
                         continue
-                    sources.append(
-                        {"path": str(file_path), "kind": "text", "chars": len(text)}
-                    )
+                    if file_path.suffix.lower() in AUDIO_EXTS:
+                        await ctx.info(f"Transcribing {file_path.name}…")
+                        transcript, detected = await stt_transcribe(
+                            sc, file_path, language_code=stt_language, metrics=metrics
+                        )
+                        text = transcript or ""
+                        sources.append(
+                            {
+                                "path": str(file_path),
+                                "kind": "audio",
+                                "language_code": detected,
+                                "chars": len(text),
+                            }
+                        )
+                    else:
+                        try:
+                            text = await asyncio.to_thread(file_path.read_text, errors="ignore")
+                        except Exception as exc:  # noqa: BLE001
+                            sources.append({"path": str(file_path), "error": repr(exc)})
+                            continue
+                        sources.append(
+                            {"path": str(file_path), "kind": "text", "chars": len(text)}
+                        )
 
-                if not text.strip():
-                    continue
-                room = MAX_CHARS - running
-                snippet = text if len(text) <= room else text[:room]
-                chunks.append(f"--- FILE: {file_path.name} ---\n{snippet}\n")
-                running += len(snippet)
+                    if not text.strip():
+                        continue
+                    room = MAX_CHARS - running
+                    snippet = text if len(text) <= room else text[:room]
+                    chunks.append(f"--- FILE: {file_path.name} ---\n{snippet}\n")
+                    running += len(snippet)
 
             await ctx.info(
                 f"Querying the LLM with {running} chars from {len(chunks)} sources…"
