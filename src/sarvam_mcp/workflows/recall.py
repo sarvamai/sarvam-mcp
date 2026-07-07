@@ -8,6 +8,7 @@ vector store; the v1 contract is intentionally tiny and stateless.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -91,7 +92,7 @@ def register(mcp: FastMCP) -> None:
                     )
                 else:
                     try:
-                        text = file_path.read_text(errors="ignore")
+                        text = await asyncio.to_thread(file_path.read_text, errors="ignore")
                     except Exception as exc:  # noqa: BLE001
                         sources.append({"path": str(file_path), "error": repr(exc)})
                         continue

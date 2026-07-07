@@ -48,6 +48,11 @@ async def resolve_file_input(
         path = Path(file_path).expanduser()
         if not path.is_file():
             raise FileNotFoundError(f"File not found: {path}")
+        size_bytes = path.stat().st_size
+        if size_bytes > max_bytes:
+            raise ValueError(
+                f"File is {size_bytes} bytes, exceeds {max_bytes} byte limit."
+            )
         yield path
         return
 

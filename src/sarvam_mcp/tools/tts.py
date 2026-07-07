@@ -37,7 +37,12 @@ def register(mcp: FastMCP) -> None:
     )
     async def sarvam_tts_speak(
         ctx: Context,
-        text: str = Field(description="The text to synthesize. Up to ~500 chars per call."),
+        text: str = Field(
+            description=(
+                "The text to synthesize. REST supports up to 2,500 chars; "
+                "shorter text gives lower latency."
+            ),
+        ),
         target_language_code: TtsLanguageCode = Field(
             description="Output language. TTS supports 11 Indic languages.",
         ),

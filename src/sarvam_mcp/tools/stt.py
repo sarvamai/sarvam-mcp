@@ -100,22 +100,22 @@ def register(mcp: FastMCP) -> None:
             file_url=audio_url, filename=filename,
         ) as path:
             with measure_tool() as metrics:
-                with path.open("rb") as fh:
-                    files = {"file": (path.name, fh, _guess_audio_mime(path))}
-                    data: dict[str, Any] = {
-                        "model": model,
-                        "language_code": language_code,
-                        "with_timestamps": str(with_timestamps).lower(),
-                    }
-                    if model == "saaras:v3" and mode != "transcribe":
-                        data["mode"] = mode
-                    elif model == "saaras:v3":
-                        data["mode"] = "transcribe"
-                    if input_audio_codec is not None:
-                        data["input_audio_codec"] = input_audio_codec
-                    payload, call = await sc.client.post_multipart(
-                        STT_PATH, data=data, files=files
-                    )
+                audio_bytes = await asyncio.to_thread(path.read_bytes)
+                files = {"file": (path.name, audio_bytes, _guess_audio_mime(path))}
+                data: dict[str, Any] = {
+                    "model": model,
+                    "language_code": language_code,
+                    "with_timestamps": str(with_timestamps).lower(),
+                }
+                if model == "saaras:v3" and mode != "transcribe":
+                    data["mode"] = mode
+                elif model == "saaras:v3":
+                    data["mode"] = "transcribe"
+                if input_audio_codec is not None:
+                    data["input_audio_codec"] = input_audio_codec
+                payload, call = await sc.client.post_multipart(
+                    STT_PATH, data=data, files=files
+                )
                 metrics.merge(call)
 
         return {
@@ -131,10 +131,12 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_stt_translate",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "DEPRECATED: Use `sarvam_tools_stt_transcribe` with `mode='translate'` instead.\n\n"
+            "DEPRECATED compatibility tool: use `sarvam_tools_stt_transcribe` with "
+            "`mode='translate'` instead. This wrapper targets the legacy "
+            "`/speech-to-text-translate` endpoint and will be removed in the "
+            "next breaking release.\n\n"
             "Transcribe an Indic-language audio file directly into English text "
-            "using the legacy `/speech-to-text-translate` endpoint. "
-            "This endpoint will be removed in a future version."
+            "using the legacy `/speech-to-text-translate` endpoint."
         ),
     )
     async def sarvam_stt_translate(
@@ -160,15 +162,15 @@ def register(mcp: FastMCP) -> None:
             file_url=audio_url, filename=filename,
         ) as path:
             with measure_tool() as metrics:
-                with path.open("rb") as fh:
-                    files = {"file": (path.name, fh, _guess_audio_mime(path))}
-                    data: dict[str, Any] = {
-                        "model": model,
-                        "with_diarization": str(with_diarization).lower(),
-                    }
-                    payload, call = await sc.client.post_multipart(
-                        STT_TRANSLATE_PATH, data=data, files=files
-                    )
+                audio_bytes = await asyncio.to_thread(path.read_bytes)
+                files = {"file": (path.name, audio_bytes, _guess_audio_mime(path))}
+                data: dict[str, Any] = {
+                    "model": model,
+                    "with_diarization": str(with_diarization).lower(),
+                }
+                payload, call = await sc.client.post_multipart(
+                    STT_TRANSLATE_PATH, data=data, files=files
+                )
                 metrics.merge(call)
 
         return {
@@ -177,8 +179,9 @@ def register(mcp: FastMCP) -> None:
             "diarized_transcript": payload.get("diarized_transcript"),
             "deprecation_notice": (
                 "This tool uses the legacy /speech-to-text-translate endpoint. "
-                "Migrate to sarvam_tools_stt_transcribe with "
-                "mode='translate' and model='saaras:v3'."
+                "Migrate to sarvam_tools_stt_transcribe with mode='translate' "
+                "and model='saaras:v3'; this compatibility tool will be removed "
+                "in the next breaking release."
             ),
             "observability": metrics.to_response_block(),
         }
@@ -274,13 +277,13 @@ def register(mcp: FastMCP) -> None:
                 file_metadata = file_details.get("file_metadata") or {}
 
                 extra_headers = {str(k): str(v) for k, v in file_metadata.items()}
-                with path.open("rb") as fh:
-                    blob_metrics = await sc.client.put_blob(
-                        presigned_url,
-                        fh.read(),
-                        content_type=_guess_audio_mime(path),
-                        extra_headers=extra_headers,
-                    )
+                audio_bytes = await asyncio.to_thread(path.read_bytes)
+                blob_metrics = await sc.client.put_blob(
+                    presigned_url,
+                    audio_bytes,
+                    content_type=_guess_audio_mime(path),
+                    extra_headers=extra_headers,
+                )
                 metrics.merge(blob_metrics)
 
                 # Step 4: Start the job

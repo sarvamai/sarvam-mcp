@@ -27,6 +27,7 @@ from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
 
 DOC_JOB_BASE = "/doc-digitization/job/v1"
 DOC_JOB_UPLOAD = f"{DOC_JOB_BASE}/upload-files"
+MAX_DOCUMENT_FILE_BYTES = 200 * 1024 * 1024  # 200 MB per Sarvam Vision docs.
 
 OutputFormat = Literal["md", "html", "json"]
 
@@ -44,7 +45,7 @@ def register(mcp: FastMCP) -> None:
             "(Document Intelligence). Supports 23 Indian languages with table "
             "preservation. Outputs markdown (default), HTML, or JSON.\n\n"
             "This runs the full async pipeline: create job → upload file → "
-            "start → poll until complete. Max 10 pages per document.\n\n"
+            "start → poll until complete. Max 10 pages per document, 200 MB per file.\n\n"
             "Returns the output download URL (presigned) and job metadata. "
             "The output is delivered as a ZIP file containing the chosen format "
             "plus a JSON file with page-level data."
@@ -77,6 +78,7 @@ def register(mcp: FastMCP) -> None:
         async with resolve_file_input(
             file_path=document_path, file_base64=document_base64,
             file_url=document_url, filename=filename,
+            max_bytes=MAX_DOCUMENT_FILE_BYTES,
         ) as path:
             with measure_tool() as metrics:
                 # Step 1: Create the job
@@ -115,13 +117,13 @@ def register(mcp: FastMCP) -> None:
                 file_metadata = file_details.get("file_metadata") or {}
 
                 extra_headers = {str(k): str(v) for k, v in file_metadata.items()}
-                with path.open("rb") as fh:
-                    blob_metrics = await sc.client.put_blob(
-                        presigned_url,
-                        fh.read(),
-                        content_type=_guess_doc_mime(path),
-                        extra_headers=extra_headers,
-                    )
+                document_bytes = await asyncio.to_thread(path.read_bytes)
+                blob_metrics = await sc.client.put_blob(
+                    presigned_url,
+                    document_bytes,
+                    content_type=_guess_doc_mime(path),
+                    extra_headers=extra_headers,
+                )
                 metrics.merge(blob_metrics)
 
                 # Step 4: Start the job

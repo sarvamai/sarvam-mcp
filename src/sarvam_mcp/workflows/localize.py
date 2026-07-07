@@ -8,6 +8,7 @@ coverage; use Mayura via the `model` arg if you need colloquial mode.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -80,7 +81,8 @@ def register(mcp: FastMCP) -> None:
 
         with measure_tool() as metrics:
             if src.suffix.lower() == ".json":
-                data = json.loads(src.read_text())
+                raw_json = await asyncio.to_thread(src.read_text)
+                data = json.loads(raw_json)
                 strings: list[tuple[list[str | int], str]] = []
                 _collect_strings(data, [], strings)
                 if len(strings) > max_strings:
@@ -103,11 +105,15 @@ def register(mcp: FastMCP) -> None:
                     if (i + 1) % 25 == 0:
                         await ctx.report_progress(i + 1, len(strings))
 
-                out_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+                await asyncio.to_thread(
+                    out_path.write_text,
+                    json.dumps(data, indent=2, ensure_ascii=False),
+                )
                 count = len(strings)
             else:
                 # Treat as `key=value` lines, preserving comments + blank lines.
-                lines = src.read_text().splitlines()
+                raw_text = await asyncio.to_thread(src.read_text)
+                lines = raw_text.splitlines()
                 count = 0
                 out_lines: list[str] = []
                 for raw in lines:
@@ -132,7 +138,7 @@ def register(mcp: FastMCP) -> None:
                     )
                     out_lines.append(f"{key}= {translated}")
                     count += 1
-                out_path.write_text("\n".join(out_lines) + "\n")
+                await asyncio.to_thread(out_path.write_text, "\n".join(out_lines) + "\n")
 
         return {
             "source_path": str(src),

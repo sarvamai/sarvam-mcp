@@ -7,6 +7,7 @@ they exist to compose, not to reimplement.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import uuid
 from pathlib import Path
@@ -39,16 +40,16 @@ async def stt_transcribe(
     metrics: ToolMetrics | None = None,
 ) -> tuple[str, str | None]:
     """Run STT, returning (transcript, detected_language)."""
-    with audio_path.open("rb") as fh:
-        files = {"file": (audio_path.name, fh, _audio_mime(audio_path))}
-        data: dict[str, Any] = {
-            "model": model,
-            "language_code": language_code,
-            "with_timestamps": "false",
-        }
-        if model == "saaras:v3":
-            data["mode"] = mode
-        body, call = await sc.client.post_multipart("/speech-to-text", data=data, files=files)
+    audio_bytes = await asyncio.to_thread(audio_path.read_bytes)
+    files = {"file": (audio_path.name, audio_bytes, _audio_mime(audio_path))}
+    data: dict[str, Any] = {
+        "model": model,
+        "language_code": language_code,
+        "with_timestamps": "false",
+    }
+    if model == "saaras:v3":
+        data["mode"] = mode
+    body, call = await sc.client.post_multipart("/speech-to-text", data=data, files=files)
     if metrics is not None:
         metrics.merge(call)
     return body.get("transcript", ""), body.get("language_code")

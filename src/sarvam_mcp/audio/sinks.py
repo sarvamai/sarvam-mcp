@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,9 +37,9 @@ class FileSink:
         self._base_path = base_path
 
     async def store(self, data: bytes, *, filename: str, mime_type: str) -> StoredAudio:
-        self._base_path.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(self._base_path.mkdir, parents=True, exist_ok=True)
         path = self._base_path / filename
-        path.write_bytes(data)
+        await asyncio.to_thread(path.write_bytes, data)
         return StoredAudio(
             file_path=str(path),
             resource_uri=None,
