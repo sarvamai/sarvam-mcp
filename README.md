@@ -81,20 +81,20 @@ All defaults below reflect the latest non-deprecated models.
 
 | Tool | What it does | Default model |
 |---|---|---|
-| `sarvam_stt_transcribe` | Audio file → transcript (5 modes) | `saaras:v3` |
-| `sarvam_tts_speak` | Text → audio file | `bulbul:v3` |
-| `sarvam_tts_stream` | Text → streamed audio | `bulbul:v3` |
-| `sarvam_translate` | Cross-language text translate | `mayura:v1` |
-| `sarvam_transliterate` | Script conversion | — |
-| `sarvam_identify_language` | Language + script detect | — |
-| `sarvam_text_analytics` | Typed Q&A over text | — |
-| `sarvam_llm_complete` | Chat completions | `sarvam-30b` |
-| `sarvam_vision_extract` | Document Intelligence | Sarvam Vision |
-| `sarvam_vision_job_status` | Poll Document Intelligence job | — |
-| `sarvam_pronunciation_list` | List pronunciation dictionaries | — |
-| `sarvam_pronunciation_get` | Get a pronunciation dictionary | — |
-| `sarvam_pronunciation_create` | Create a pronunciation dictionary | — |
-| `sarvam_pronunciation_delete` | Delete a pronunciation dictionary | — |
+| `sarvam_tools_stt_transcribe` | Audio file → transcript (5 modes) | `saaras:v3` |
+| `sarvam_tools_tts_speak` | Text → audio file | `bulbul:v3` |
+| `sarvam_tools_tts_stream` | Text → streamed audio | `bulbul:v3` |
+| `sarvam_tools_translate` | Cross-language text translate | `mayura:v1` |
+| `sarvam_tools_transliterate` | Script conversion | — |
+| `sarvam_tools_identify_language` | Language + script detect | — |
+| `sarvam_tools_text_analytics` | Typed Q&A over text | — |
+| `sarvam_tools_llm_complete` | Chat completions | `sarvam-30b` |
+| `sarvam_tools_vision_extract` | Document Intelligence | Sarvam Vision |
+| `sarvam_tools_vision_job_status` | Poll Document Intelligence job | — |
+| `sarvam_tools_pronunciation_list` | List pronunciation dictionaries | — |
+| `sarvam_tools_pronunciation_get` | Get a pronunciation dictionary | — |
+| `sarvam_tools_pronunciation_create` | Create a pronunciation dictionary | — |
+| `sarvam_tools_pronunciation_delete` | Delete a pronunciation dictionary | — |
 
 ## Configuration
 
