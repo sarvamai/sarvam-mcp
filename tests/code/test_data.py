@@ -28,6 +28,15 @@ def test_default_speaker_priya_is_v3():
     assert "priya" in _data.V3_SPEAKERS
 
 
+def test_pronunciation_reference_matches_runtime_delete_shape():
+    # The runtime delete tool passes the id as a query param
+    # (?dict_id=), not a path segment. The reference note must not tell
+    # code-gen agents to use the path form.
+    note = _data.API_REFERENCE["/text-to-speech/pronunciation-dictionary"]["notes"]
+    assert "dict_id" in note
+    assert "DELETE /{id}" not in note
+
+
 def test_pricing_table_covers_every_model_in_reference():
     referenced_models: set[str] = set()
     for _endpoint, ref in _data.API_REFERENCE.items():
