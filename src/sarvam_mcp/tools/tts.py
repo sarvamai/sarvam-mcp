@@ -10,6 +10,7 @@ from typing import Any, Literal
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
+from sarvam_mcp.audio import StoredAudio
 from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import BulbulSpeaker, TtsLanguageCode, ready_ctx
 
@@ -89,11 +90,7 @@ def register(mcp: FastMCP) -> None:
         )
 
         return {
-            "file_path": stored.file_path,
-            "resource_uri": stored.resource_uri,
-            "base64_data": stored.base64_data,
-            "mime_type": stored.mime_type,
-            "size_bytes": stored.size_bytes,
+            **_stored_audio_fields(stored),
             "speaker": speaker,
             "language": target_language_code,
             "observability": metrics.to_response_block(),
@@ -171,9 +168,7 @@ def register(mcp: FastMCP) -> None:
         )
 
         return {
-            "file_path": stored.file_path,
-            "resource_uri": stored.resource_uri,
-            "size_bytes": stored.size_bytes,
+            **_stored_audio_fields(stored),
             "completed_at": time.time(),
             "observability": metrics.to_response_block(),
         }
@@ -209,3 +204,13 @@ def _maybe_parse_event(frame: str) -> dict[str, Any]:
         return result if isinstance(result, dict) else {}
     except _json.JSONDecodeError:
         return {}
+
+
+def _stored_audio_fields(stored: StoredAudio) -> dict[str, Any]:
+    return {
+        "file_path": stored.file_path,
+        "resource_uri": stored.resource_uri,
+        "base64_data": stored.base64_data,
+        "mime_type": stored.mime_type,
+        "size_bytes": stored.size_bytes,
+    }
