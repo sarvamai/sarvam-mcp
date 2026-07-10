@@ -46,7 +46,7 @@ def register(mcp: FastMCP) -> None:
             "  • `codemix` — English words in English, Indic words in native script\n\n"
             "The default `language_code='unknown'` auto-detects, but specifying the "
             "language (e.g. `hi-IN`, `ta-IN`) gives better accuracy.\n"
-            "For very long files (>30s), prefer `sarvam_stt_batch_submit`."
+            "For very long files (>30s), prefer `sarvam_tools_stt_batch_submit`."
         ),
     )
     async def sarvam_stt_transcribe(
@@ -354,7 +354,7 @@ def register(mcp: FastMCP) -> None:
     )
     async def sarvam_stt_batch_status(
         ctx: Context,
-        job_id: str = Field(description="The job_id returned by sarvam_stt_batch_submit."),
+        job_id: str = Field(description="The job_id returned by sarvam_tools_stt_batch_submit."),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         with measure_tool() as metrics:
