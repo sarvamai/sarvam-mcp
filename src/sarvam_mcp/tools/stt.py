@@ -11,6 +11,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp._registry import ServerContext
+from sarvam_mcp.http.errors import SarvamBadRequestError
 from sarvam_mcp.observability import ToolMetrics, measure_tool
 from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
 
@@ -22,6 +23,12 @@ STT_JOB_DOWNLOAD = f"{STT_JOB_BASE}/download-files"
 
 MAX_POLL_ATTEMPTS = 90
 POLL_INTERVAL_SECONDS = 2
+
+# /download-files can reject a job as not-yet-Completed for a few seconds
+# right after /status already reports it terminal — a backend consistency
+# lag between the two endpoints, observed most on fast-completing jobs.
+DOWNLOAD_READY_ATTEMPTS = 3
+DOWNLOAD_READY_RETRY_DELAY_SECONDS = 3
 
 SttModel = Literal["saaras:v3"]
 
@@ -143,16 +150,33 @@ async def stt_batch_transcribe(
     transcript = result.get("transcript") or status_resp.get("transcript")
 
     if not transcript:
-        download_urls = status_resp.get("download_urls", {})
-        if download_urls:
+        # The status response never inlines the result for a job whose output
+        # wasn't returned directly — the documented flow is to fetch the SAS
+        # URL for each output file via /download-files, then GET it.
+        file_names = [
+            output["file_name"]
+            for detail in status_resp.get("job_details") or []
+            for output in detail.get("outputs") or []
+            if output.get("file_name")
+        ]
+        if file_names:
+            await ctx.info("Fetching output file list…")
+            download_urls = await _fetch_download_urls(sc, job_id, file_names, metrics)
+
             await ctx.info("Downloading transcript…")
-            dl_url = next(iter(download_urls.values()))["file_url"]
             async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as dl:
-                dl_resp = await dl.get(dl_url)
-            if dl_resp.is_success:
-                dl_body = dl_resp.json()
-                transcript = dl_body.get("transcript", "")
-                result = dl_body
+                for file_details in download_urls.values():
+                    dl_url = file_details.get("file_url")
+                    if not dl_url:
+                        continue
+                    dl_resp = await dl.get(dl_url)
+                    if not dl_resp.is_success:
+                        continue
+                    dl_body = dl_resp.json()
+                    if dl_body.get("transcript"):
+                        transcript = dl_body["transcript"]
+                        result = dl_body
+                        break
 
     return {
         "job_id": job_id,
@@ -162,6 +186,39 @@ async def stt_batch_transcribe(
         "diarized_transcript": result.get("diarized_transcript"),
         "timestamps": result.get("timestamps"),
     }
+
+
+async def _fetch_download_urls(
+    sc: ServerContext,
+    job_id: str,
+    file_names: list[str],
+    metrics: ToolMetrics,
+) -> dict[str, Any]:
+    """POST /download-files, retrying briefly on a transient consistency lag.
+
+    Observed live: /download-files can reject a job as not-yet-Completed for
+    a few seconds right after /status already reports it terminal, most often
+    on fast-completing jobs. Retries only on that specific rejection — any
+    other SarvamBadRequestError (a real caller-side problem) is not retried.
+    """
+    for attempt in range(DOWNLOAD_READY_ATTEMPTS):
+        try:
+            dl_list_resp, call = await sc.client.post_json(
+                STT_JOB_DOWNLOAD,
+                json_body={"job_id": job_id, "files": file_names},
+            )
+        except SarvamBadRequestError as exc:
+            if "COMPLETED state" not in str(exc) or attempt == DOWNLOAD_READY_ATTEMPTS - 1:
+                raise RuntimeError(
+                    f"Job {job_id} polled as terminal, but /download-files still "
+                    f"rejects it after {attempt + 1} attempt(s): {exc}"
+                ) from exc
+            await asyncio.sleep(DOWNLOAD_READY_RETRY_DELAY_SECONDS * (attempt + 1))
+            continue
+        metrics.merge(call)
+        return dl_list_resp.get("download_urls") or {}
+
+    raise AssertionError("unreachable")  # loop always returns or raises
 
 
 def register(mcp: FastMCP) -> None:
