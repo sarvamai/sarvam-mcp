@@ -79,6 +79,9 @@ pip install sarvam-mcp
 
 All defaults below reflect the latest non-deprecated models.
 
+> **Note:** All `sarvam_tools_*` tools require `SARVAM_API_KEY` to be set. See [Configuration](#configuration) section for setup details.
+>
+
 | Tool | What it does | Default model |
 |---|---|---|
 | `sarvam_stt_transcribe` | Audio file → transcript (5 modes) | `saaras:v3` |
@@ -109,7 +112,7 @@ All defaults below reflect the latest non-deprecated models.
 
 The server exposes tools across two namespaces:
 
-- **`sarvam_tools_*`** — *runtime* tools. Call Sarvam APIs to do things (transcribe, speak, translate, etc.).
+- **`sarvam_tools_*`** — *runtime* tools. Call Sarvam APIs to do things (transcribe, speak, translate, etc.). **Requires `SARVAM_API_KEY`.**
 - **`sarvam_code_*`** — *builder* tools. Help you write code that uses Sarvam: docs, endpoint shapes, language lists, code snippets, starter projects.
 
 ## Development
