@@ -29,7 +29,7 @@ def test_redact_is_case_insensitive_and_nested():
 def test_redact_preserves_benign_keys():
     # `max_tokens` contains the substring "token" but is not a secret — exact
     # key matching must leave it untouched.
-    payload = {"max_tokens": 600, "model": "sarvam-30b", "temperature": 0.7}
+    payload = {"max_tokens": 600, "model": "sarvam-105b", "temperature": 0.7}
     assert _redact(payload) == payload
 
 

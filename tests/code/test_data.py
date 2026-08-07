@@ -35,7 +35,7 @@ def test_pricing_table_covers_every_model_in_reference():
             for chunk in model_str.split(","):
                 # Pull bare model ids out of the human-readable list.
                 for word in chunk.split():
-                    if ":" in word or word in {"sarvam-30b", "sarvam-105b"}:
+                    if ":" in word or word in {"sarvam-105b"}:
                         referenced_models.add(word.strip(",.()"))
     # Every referenced model must appear in PRICING.
     missing = referenced_models - _data.PRICING.keys()

@@ -88,7 +88,7 @@ All defaults below reflect the latest non-deprecated models.
 | `sarvam_transliterate` | Script conversion | — |
 | `sarvam_identify_language` | Language + script detect | — |
 | `sarvam_text_analytics` | Typed Q&A over text | — |
-| `sarvam_llm_complete` | Chat completions | `sarvam-30b` |
+| `sarvam_llm_complete` | Chat completions | `sarvam-105b` |
 | `sarvam_vision_extract` | Document Intelligence | Sarvam Vision |
 | `sarvam_vision_job_status` | Poll Document Intelligence job | — |
 | `sarvam_pronunciation_list` | List pronunciation dictionaries | — |

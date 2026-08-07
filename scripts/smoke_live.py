@@ -253,7 +253,7 @@ async def main() -> None:
         client.post_json(
             "/v1/chat/completions",
             json_body={
-                "model": "sarvam-30b",
+                "model": "sarvam-105b",
                 "messages": [
                     {"role": "system", "content": "You are a concise Indic-language expert."},
                     {"role": "user", "content": "Translate 'good morning' into Tamil and Marathi."},
