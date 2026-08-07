@@ -112,7 +112,7 @@ def test_validate_clean_request_returns_no_errors():
     issues = _validate(
         "/v1/chat/completions",
         {
-            "model": "sarvam-30b",
+            "model": "sarvam-105b",
             "messages": [{"role": "user", "content": "hi"}],
             "temperature": 0.5,
         },

@@ -119,7 +119,7 @@ async def llm_complete(
     sc: ServerContext,
     messages: list[dict[str, Any]],
     *,
-    model: SarvamLLM = "sarvam-30b",
+    model: SarvamLLM = "sarvam-105b",
     temperature: float = 0.4,
     max_tokens: int = 600,
     metrics: ToolMetrics | None = None,

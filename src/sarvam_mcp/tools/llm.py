@@ -20,11 +20,9 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_llm_complete",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Generate chat completions with Sarvam's Indic-tuned LLMs.\n\n"
-            "Models:\n"
-            "  • `sarvam-30b` (default) — MoE, 2.4B active, balanced quality + cost\n"
-            "  • `sarvam-105b` — MoE flagship, best reasoning + tool use\n\n"
-            "Both support 23 Indic languages with native, romanized, and "
+            "Generate chat completions with Sarvam's Indic-tuned LLM.\n\n"
+            "Model: `sarvam-105b` — MoE flagship, best reasoning + tool use. "
+            "Supports 23 Indic languages with native, romanized, and "
             "code-mixed styles. OpenAI-compatible message format."
         ),
     )
@@ -37,8 +35,8 @@ def register(mcp: FastMCP) -> None:
             ),
         ),
         model: SarvamLLM = Field(
-            default="sarvam-30b",
-            description="`sarvam-30b` (default) or `sarvam-105b` (flagship).",
+            default="sarvam-105b",
+            description="`sarvam-105b` (flagship, the only current chat model).",
         ),
         temperature: float = Field(default=0.7, ge=0.0, le=2.0),
         top_p: float = Field(default=1.0, ge=0.0, le=1.0),

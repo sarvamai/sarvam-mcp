@@ -214,19 +214,10 @@ def _recommend(task: str) -> dict[str, Any]:
 
     # ---- chat / LLM / agent
     if re.search(r"\b(chat|chatbot|llm|agent|generate text|reply|conversation|reasoning|reasoning agent)\b", t):
-        # Bigger model when 'reasoning'/'tool use'/'flagship' signals appear.
-        if re.search(r"\b(reasoning|complex|flagship|best|highest quality|tool use)\b", t):
-            return _result(
-                model="sarvam-105b",
-                endpoint="/v1/chat/completions",
-                why="Highest-quality reasoning + tool use across Indic languages.",
-                language_code=detected_lang,
-                snippet_key=("llm", "python"),
-            )
         return _result(
-            model="sarvam-30b",
+            model="sarvam-105b",
             endpoint="/v1/chat/completions",
-            why="Sarvam-30B — balanced quality + cost, recommended default for chat/agents in Indic languages.",
+            why="Sarvam-105B — flagship model, best reasoning + tool use across Indic languages. The sole current chat model (sarvam-30b was deprecated).",
             language_code=detected_lang,
             snippet_key=("llm", "python"),
         )
@@ -291,7 +282,7 @@ def _result(
 # ---- request validation ---------------------------------------------------
 
 _VALID_TTS_MODELS = {"bulbul:v3"}
-_VALID_LLM_MODELS = {"sarvam-30b", "sarvam-105b"}
+_VALID_LLM_MODELS = {"sarvam-105b"}
 _VALID_TRANSLATE_MODELS = {"mayura:v1", "sarvam-translate:v1"}
 _VALID_STT_MODELS = {"saaras:v3"}
 _VALID_STT_MODES = {"transcribe", "translate", "verbatim", "translit", "codemix"}
@@ -378,7 +369,7 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
     elif endpoint == "/v1/chat/completions":
         if not body.get("messages"):
             issues.append(_err("messages", "Required."))
-        model = body.get("model", "sarvam-30b")
+        model = body.get("model", "sarvam-105b")
         if model not in _VALID_LLM_MODELS:
             issues.append(_err("model", f"'{model}' invalid.",
                                f"Valid: {sorted(_VALID_LLM_MODELS)}"))

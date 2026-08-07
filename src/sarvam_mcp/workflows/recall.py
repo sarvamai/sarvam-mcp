@@ -54,8 +54,8 @@ def register(mcp: FastMCP) -> None:
         ),
         max_files: int = Field(default=20, ge=1, le=100),
         llm_model: SarvamLLM = Field(
-            default="sarvam-30b",
-            description="`sarvam-30b` (default) or `sarvam-105b` (flagship).",
+            default="sarvam-105b",
+            description="`sarvam-105b` (flagship, the only current chat model).",
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
