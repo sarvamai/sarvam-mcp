@@ -8,6 +8,8 @@ vector store; the v1 contract is intentionally tiny and stateless.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from itertools import islice
 from pathlib import Path
 from typing import Any
 
@@ -144,21 +146,18 @@ def register(mcp: FastMCP) -> None:
 
 
 def _gather_files(paths: list[str], max_files: int) -> list[Path]:
-    out: list[Path] = []
-    for raw in paths:
-        p = Path(raw).expanduser()
-        if p.is_file():
-            if _supported(p):
-                out.append(p)
-        elif p.is_dir():
-            for sub in sorted(p.rglob("*")):
-                if sub.is_file() and _supported(sub):
-                    out.append(sub)
-                if len(out) >= max_files:
-                    break
-        if len(out) >= max_files:
-            break
-    return out[:max_files]
+    def _iter_supported() -> Iterator[Path]:
+        for raw in paths:
+            p = Path(raw).expanduser()
+            if p.is_file():
+                if _supported(p):
+                    yield p
+            elif p.is_dir():
+                for sub in p.rglob("*"):
+                    if sub.is_file() and _supported(sub):
+                        yield sub
+
+    return list(islice(_iter_supported(), max_files))
 
 
 def _supported(p: Path) -> bool:
