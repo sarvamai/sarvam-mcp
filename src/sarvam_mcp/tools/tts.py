@@ -48,9 +48,15 @@ def register(mcp: FastMCP) -> None:
         speech_sample_rate: SampleRate = Field(
             default=24000, description="PCM sample rate of the output WAV."
         ),
-        pitch: float = Field(default=0.0, ge=-1.0, le=1.0),
+        pitch: float = Field(
+            default=0.0, ge=-1.0, le=1.0,
+            description="bulbul:v2 only — ignored by bulbul:v3.",
+        ),
         pace: float = Field(default=1.0, ge=0.3, le=3.0),
-        loudness: float = Field(default=1.0, ge=0.1, le=3.0),
+        loudness: float = Field(
+            default=1.0, ge=0.1, le=3.0,
+            description="bulbul:v2 only — ignored by bulbul:v3.",
+        ),
         enable_preprocessing: bool = Field(
             default=True,
             description="Normalize numbers/dates/code-mixed segments before synthesis.",
@@ -61,17 +67,17 @@ def register(mcp: FastMCP) -> None:
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
-        body: dict[str, Any] = {
-            "inputs": [text],
-            "target_language_code": target_language_code,
-            "speaker": speaker,
-            "speech_sample_rate": speech_sample_rate,
-            "pitch": pitch,
-            "pace": pace,
-            "loudness": loudness,
-            "enable_preprocessing": enable_preprocessing,
-            "model": model,
-        }
+        body = _speak_body(
+            text=text,
+            target_language_code=target_language_code,
+            speaker=speaker,
+            speech_sample_rate=speech_sample_rate,
+            pitch=pitch,
+            pace=pace,
+            loudness=loudness,
+            enable_preprocessing=enable_preprocessing,
+            model=model,
+        )
 
         with measure_tool() as metrics:
             payload, call = await sc.client.post_json(TTS_PATH, json_body=body)
@@ -177,6 +183,39 @@ def register(mcp: FastMCP) -> None:
             "completed_at": time.time(),
             "observability": metrics.to_response_block(),
         }
+
+
+def _speak_body(
+    *,
+    text: str,
+    target_language_code: str,
+    speaker: str,
+    speech_sample_rate: int,
+    pitch: float,
+    pace: float,
+    loudness: float,
+    enable_preprocessing: bool,
+    model: str,
+) -> dict[str, Any]:
+    """Build the /text-to-speech request body.
+
+    ``pitch`` and ``loudness`` are bulbul:v2-only parameters — bulbul:v3
+    does not support them, so they are omitted for v3 rather than sent and
+    silently ignored.
+    """
+    body: dict[str, Any] = {
+        "inputs": [text],
+        "target_language_code": target_language_code,
+        "speaker": speaker,
+        "speech_sample_rate": speech_sample_rate,
+        "pace": pace,
+        "enable_preprocessing": enable_preprocessing,
+        "model": model,
+    }
+    if model != "bulbul:v3":
+        body["pitch"] = pitch
+        body["loudness"] = loudness
+    return body
 
 
 def _ws_request_payload(
