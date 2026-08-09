@@ -1,13 +1,4 @@
-"""Behavioral test for the _gather_files lazy-cap fix.
-
-No timing assertions (flaky in CI). We count how many entries `rglob`
-actually yields. With `sorted(p.rglob("*"))`, the full generator is
-drained (~505 entries) before the max_files cap can trigger. With the
-lazy `islice` cap, iteration stops after ~max_files supported files.
-
-Technique: monkeypatch the `Path` symbol imported into the recall module
-with a subclass whose rglob counts yields.
-"""
+"""Tests that _gather_files stops walking once max_files is reached."""
 
 from __future__ import annotations
 
@@ -18,6 +9,8 @@ import pytest
 import sarvam_mcp.workflows.recall as recall
 
 
+# No timing asserts (flaky in CI): monkeypatch recall.Path with a subclass
+# that counts rglob yields, then assert the walk stops near max_files.
 class CountingPath(type(Path())):
     """Path subclass whose rglob counts yielded entries."""
 
@@ -25,8 +18,6 @@ class CountingPath(type(Path())):
 
     def rglob(self, pattern):
         for entry in super().rglob(pattern):
-            CountingPath.yields += 1
-            yield entry
             CountingPath.yields += 1
             yield entry
 
