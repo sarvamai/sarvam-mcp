@@ -156,7 +156,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "notes": (
             "Saaras v3 is the recommended model. It supports 5 output modes via the `mode` parameter. "
-            "For >30s audio, use /speech-to-text/job/init."
+            "For >30s audio, use the batch job API at /speech-to-text/job/v1."
         ),
     },
     "/speech-to-text-translate": {
@@ -175,22 +175,29 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "notes": "DEPRECATED. Migrate to /speech-to-text with model=saaras:v3 and mode=translate.",
     },
-    "/speech-to-text/job/init": {
+    "/speech-to-text/job/v1": {
         "method": "POST",
         "model": "saaras:v3 (recommended)",
         "content_type": "application/json",
         "request_body": {
-            "model":           "str",
-            "with_timestamps": "bool",
-            "language_code":   "str (optional)",
+            "job_parameters": (
+                "object — {model, language_code (optional), mode, with_timestamps, "
+                "with_diarization, num_speakers (optional)}"
+            ),
         },
         "response": {
-            "job_id":                  "str",
-            "input_storage_path":      "str — Azure Blob SAS URL (PUT audio here)",
-            "output_storage_path":     "str — Azure Blob SAS URL (poll for results)",
-            "storage_container_type":  "str — 'Azure'",
+            "job_id":                 "str (UUID)",
+            "job_state":              "str",
+            "storage_container_type": "str",
         },
-        "notes": "Async batch flow: init -> upload to SAS -> poll /speech-to-text/job/status?job_id=...",
+        "notes": (
+            "Job-based async pipeline for audio >30s (up to 20 files / 2 hours per job): "
+            "create job → get upload URLs (POST /speech-to-text/job/v1/upload-files) → "
+            "PUT files to the presigned URLs → "
+            "start (POST /speech-to-text/job/v1/{job_id}/start) → "
+            "poll status (GET /speech-to-text/job/v1/{job_id}/status) → "
+            "download results (POST /speech-to-text/job/v1/download-files)."
+        ),
     },
     "/translate": {
         "method": "POST",

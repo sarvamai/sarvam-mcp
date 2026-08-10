@@ -3,6 +3,16 @@
 from __future__ import annotations
 
 from sarvam_mcp.code import _data
+from sarvam_mcp.tools.stt import STT_JOB_BASE
+
+
+def test_batch_stt_reference_matches_runtime_endpoint():
+    # The sarvam_code_* docs must point devs at the real batch-STT endpoint
+    # the runtime actually calls (/speech-to-text/job/v1), not the stale
+    # /speech-to-text/job/init that was documented before.
+    assert STT_JOB_BASE == "/speech-to-text/job/v1"
+    assert STT_JOB_BASE in _data.API_REFERENCE
+    assert "/speech-to-text/job/init" not in _data.API_REFERENCE
 
 
 def test_all_languages_have_required_fields():
