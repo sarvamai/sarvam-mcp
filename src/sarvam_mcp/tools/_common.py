@@ -58,30 +58,36 @@ async def resolve_file_input(
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp_path = Path(tmp.name)
     try:
-        if file_base64 is not None:
-            data = base64.b64decode(file_base64)
-            if len(data) > max_bytes:
-                raise ValueError(
-                    f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
-                )
-            tmp.write(data)
+        # Everything that can raise (decode/size/network errors) lives in this
+        # inner try, with `tmp.close()` guaranteed in its `finally` — so the
+        # handle is always closed before the outer `finally` unlinks the path.
+        # Skipping that ordering is what breaks on Windows: you can't unlink a
+        # file that's still open there, so the unlink raises PermissionError
+        # and masks whatever exception actually caused the failure.
+        try:
+            if file_base64 is not None:
+                data = base64.b64decode(file_base64)
+                if len(data) > max_bytes:
+                    raise ValueError(
+                        f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
+                    )
+                tmp.write(data)
+            else:
+                assert file_url is not None
+                async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
+                    async with client.stream("GET", file_url) as resp:
+                        resp.raise_for_status()
+                        downloaded = 0
+                        async for chunk in resp.aiter_bytes(chunk_size=65536):
+                            downloaded += len(chunk)
+                            if downloaded > max_bytes:
+                                raise ValueError(
+                                    f"Downloaded file exceeds {max_bytes} byte limit."
+                                )
+                            tmp.write(chunk)
+        finally:
             tmp.close()
-            yield tmp_path
-        else:
-            assert file_url is not None
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-                async with client.stream("GET", file_url) as resp:
-                    resp.raise_for_status()
-                    downloaded = 0
-                    async for chunk in resp.aiter_bytes(chunk_size=65536):
-                        downloaded += len(chunk)
-                        if downloaded > max_bytes:
-                            raise ValueError(
-                                f"Downloaded file exceeds {max_bytes} byte limit."
-                            )
-                        tmp.write(chunk)
-            tmp.close()
-            yield tmp_path
+        yield tmp_path
     finally:
         tmp_path.unlink(missing_ok=True)
 
