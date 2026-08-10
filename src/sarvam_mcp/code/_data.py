@@ -136,13 +136,13 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
     },
     "/speech-to-text": {
         "method": "POST",
-        "model": "saaras:v3 (recommended)",
+        "model": "saaras:v4 (recommended, latest)",
         "content_type": "multipart/form-data",
         "auth_header": "api-subscription-key",
         "request_body": {
             "file":              "binary, required — audio (wav, mp3, ogg, flac, m4a, webm, aac, opus, amr, wma)",
-            "model":             "str — saaras:v3",
-            "mode":              "str — transcribe (default) | translate | verbatim | translit | codemix (saaras:v3 only)",
+            "model":             "str — saaras:v4 (latest) | saaras:v3",
+            "mode":              "str — transcribe (default) | translate | verbatim | translit | codemix (saaras:v3/v4 only)",
             "language_code":     "str — BCP-47 or 'unknown' for auto-detect",
             "with_timestamps":   "bool",
             "input_audio_codec": "str (optional) — pcm_s16le | pcm_l16 | pcm_raw (required for PCM files, 16kHz only)",
@@ -155,7 +155,8 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "timestamps":           "list[word_ts] | null",
         },
         "notes": (
-            "Saaras v3 is the recommended model. It supports 5 output modes via the `mode` parameter. "
+            "Saaras v4 is the latest, recommended model (22 Indic languages + Global/Indian English). "
+            "It supports 5 output modes via the `mode` parameter, same as v3. "
             "For >30s audio, use /speech-to-text/job/init."
         ),
     },
@@ -173,11 +174,11 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "transcript":           "str — always English",
             "language_code":        "str — detected source language",
         },
-        "notes": "DEPRECATED. Migrate to /speech-to-text with model=saaras:v3 and mode=translate.",
+        "notes": "DEPRECATED. Migrate to /speech-to-text with model=saaras:v4 and mode=translate.",
     },
     "/speech-to-text/job/init": {
         "method": "POST",
-        "model": "saaras:v3 (recommended)",
+        "model": "saaras:v4 (recommended, latest)",
         "content_type": "application/json",
         "request_body": {
             "model":           "str",
@@ -308,7 +309,8 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 PRICING: dict[str, dict[str, Any]] = {
-    "saaras:v3":            {"unit": "per minute of audio",   "tier": "billed by minute (recommended)"},
+    "saaras:v4":            {"unit": "per minute of audio",   "tier": "billed by minute (recommended, latest)"},
+    "saaras:v3":            {"unit": "per minute of audio",   "tier": "billed by minute"},
     "saaras:v3-realtime":   {"unit": "per minute of audio",   "tier": "billed by minute"},
     "saaras:v2.5":          {"unit": "per minute of audio",   "tier": "billed by minute (legacy, deprecated soon)"},
     "bulbul:v3":            {"unit": "per character",         "tier": "billed by character"},

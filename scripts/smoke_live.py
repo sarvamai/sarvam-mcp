@@ -325,7 +325,7 @@ async def main() -> None:
         wav_path = AUDIO_DIR / "tts_speak.wav"
         files = {"file": (wav_path.name, wav_path.read_bytes(), "audio/wav")}
         data = {
-            "model": "saaras:v3",
+            "model": "saaras:v4",
             "language_code": "hi-IN",
             "with_timestamps": "false",
             "mode": "transcribe",
@@ -393,7 +393,7 @@ async def main() -> None:
         name,
         client.post_json(
             "/speech-to-text/job/init",
-            json_body={"model": "saaras:v3", "with_timestamps": False},
+            json_body={"model": "saaras:v4", "with_timestamps": False},
         ),
     )
     if payload is not None:

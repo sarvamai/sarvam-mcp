@@ -10,7 +10,7 @@ from sarvam_mcp.code.snippets import _recommend, _validate
 def test_recommend_picks_saaras_for_audio_to_english():
     result = _recommend("transcribe Hindi voicemails into English text")
     assert result["matched"]
-    assert result["recommended_model"] == "saaras:v3"
+    assert result["recommended_model"] == "saaras:v4"
     assert result["endpoint"] == "/speech-to-text"
     assert result["mode"] == "translate"
 
@@ -18,7 +18,7 @@ def test_recommend_picks_saaras_for_audio_to_english():
 def test_recommend_picks_saaras_for_indic_transcription():
     result = _recommend("transcribe Tamil customer-support calls")
     assert result["matched"]
-    assert result["recommended_model"] == "saaras:v3"
+    assert result["recommended_model"] == "saaras:v4"
     assert result["language_code"] == "ta-IN"
     assert result["mode"] == "transcribe"
 
@@ -80,7 +80,7 @@ def test_validate_tts_v3_with_v3_speaker_passes():
 def test_validate_stt_rejects_invalid_stt_model():
     issues = _validate("/speech-to-text", {"model": "stt-legacy-99"})
     assert [i for i in issues if i["field"] == "model"]
-    assert any("saaras:v3" in (i.get("fix", "") + i.get("message", "")) for i in issues)
+    assert any("saaras:v4" in (i.get("fix", "") + i.get("message", "")) for i in issues)
 
 
 def test_validate_translate_rejects_unknown_language():

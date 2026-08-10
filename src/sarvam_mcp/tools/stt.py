@@ -1,4 +1,4 @@
-"""Speech-to-text tools — transcribe (Saaras v3), translate (legacy), batch jobs."""
+"""Speech-to-text tools — transcribe (Saaras v4), translate (legacy), batch jobs."""
 
 from __future__ import annotations
 
@@ -22,14 +22,17 @@ STT_JOB_DOWNLOAD = f"{STT_JOB_BASE}/download-files"
 MAX_POLL_ATTEMPTS = 90
 POLL_INTERVAL_SECONDS = 2
 
-SttModel = Literal["saaras:v3"]
+SttModel = Literal["saaras:v4", "saaras:v3"]
+
+# Models whose /speech-to-text call accepts the `mode` form field.
+_MODE_CAPABLE_MODELS = {"saaras:v4", "saaras:v3"}
 
 SttMode = Literal["transcribe", "translate", "verbatim", "translit", "codemix"]
 
 InputAudioCodec = Literal["pcm_s16le", "pcm_l16", "pcm_raw"]
 
 # Legacy model types kept for the deprecated translate tool.
-SaarasModel = Literal["saaras:v3", "saaras:v3-realtime", "saaras:v2.5"]
+SaarasModel = Literal["saaras:v4", "saaras:v3", "saaras:v3-realtime", "saaras:v2.5"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -37,8 +40,8 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_stt_transcribe",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Transcribe an audio file in any of 23 Indian languages using Saaras v3.\n\n"
-            "Saaras v3 supports multiple output modes via the `mode` parameter:\n"
+            "Transcribe an audio file in any of 23 Indian languages using Saaras v4.\n\n"
+            "Saaras v4 (like v3) supports multiple output modes via the `mode` parameter:\n"
             "  • `transcribe` (default) — standard transcription in the original language\n"
             "  • `translate` — speech from any Indic language directly to English text\n"
             "  • `verbatim` — exact word-for-word, no normalization, filler words preserved\n"
@@ -74,7 +77,7 @@ def register(mcp: FastMCP) -> None:
         mode: SttMode = Field(
             default="transcribe",
             description=(
-                "Output mode (Saaras v3 only). "
+                "Output mode (Saaras v3/v4 only). "
                 "'transcribe' (default) | 'translate' (→ English) | "
                 "'verbatim' | 'translit' (→ Roman) | 'codemix'."
             ),
@@ -83,8 +86,8 @@ def register(mcp: FastMCP) -> None:
             default=False, description="Include word-level timestamps in the response."
         ),
         model: SttModel = Field(
-            default="saaras:v3",
-            description="Saaras v3 (recommended STT model for Indic audio).",
+            default="saaras:v4",
+            description="Saaras v4 (recommended, latest STT model for Indic audio). Falls back to saaras:v3 if needed.",
         ),
         input_audio_codec: InputAudioCodec | None = Field(
             default=None,
@@ -107,10 +110,8 @@ def register(mcp: FastMCP) -> None:
                         "language_code": language_code,
                         "with_timestamps": str(with_timestamps).lower(),
                     }
-                    if model == "saaras:v3" and mode != "transcribe":
+                    if model in _MODE_CAPABLE_MODELS:
                         data["mode"] = mode
-                    elif model == "saaras:v3":
-                        data["mode"] = "transcribe"
                     if input_audio_codec is not None:
                         data["input_audio_codec"] = input_audio_codec
                     payload, call = await sc.client.post_multipart(
@@ -150,7 +151,7 @@ def register(mcp: FastMCP) -> None:
             default="saaras:v2.5",
             description=(
                 "Legacy Saaras model for the /speech-to-text-translate endpoint. "
-                "Prefer using sarvam_tools_stt_transcribe with mode='translate' and saaras:v3."
+                "Prefer using sarvam_tools_stt_transcribe with mode='translate' and saaras:v4."
             ),
         ),
     ) -> dict[str, Any]:
@@ -178,7 +179,7 @@ def register(mcp: FastMCP) -> None:
             "deprecation_notice": (
                 "This tool uses the legacy /speech-to-text-translate endpoint. "
                 "Migrate to sarvam_tools_stt_transcribe with "
-                "mode='translate' and model='saaras:v3'."
+                "mode='translate' and model='saaras:v4'."
             ),
             "observability": metrics.to_response_block(),
         }
@@ -190,7 +191,7 @@ def register(mcp: FastMCP) -> None:
             "Transcribe a long audio file (>30 s) using the batch job pipeline. "
             "Runs the full flow automatically: create job → upload audio to Azure "
             "Blob → start processing → poll until complete → return transcript.\n\n"
-            "Supports diarization, timestamps, and all Saaras v3 output modes."
+            "Supports diarization, timestamps, and all Saaras v4/v3 output modes."
         ),
     )
     async def sarvam_stt_batch_submit(
@@ -228,7 +229,7 @@ def register(mcp: FastMCP) -> None:
             default=None,
             description="Hint for diarization: expected number of speakers.",
         ),
-        model: SttModel = Field(default="saaras:v3"),
+        model: SttModel = Field(default="saaras:v4"),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         async with resolve_file_input(

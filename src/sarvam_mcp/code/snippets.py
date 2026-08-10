@@ -149,17 +149,17 @@ def _recommend(task: str) -> dict[str, Any]:
     if re.search(r"\b(transcrib\w*|stt|speech.{0,5}to.{0,5}text|voice ?memo|voicemail\w*|recording|audio file)\b", t):
         if "english" in t or re.search(r"into english|to english", t):
             return _result(
-                model="saaras:v3",
+                model="saaras:v4",
                 endpoint="/speech-to-text",
-                why="Audio in any Indic language, output as English text — use Saaras v3 with mode='translate'.",
+                why="Audio in any Indic language, output as English text — use Saaras v4 with mode='translate'.",
                 language_code=None,
                 snippet_key=("stt", "python"),
                 extras={"mode": "translate"},
             )
         return _result(
-            model="saaras:v3",
+            model="saaras:v4",
             endpoint="/speech-to-text",
-            why="Saaras v3 is the recommended STT model (23 languages). Supports transcribe/translate/verbatim/translit/codemix modes.",
+            why="Saaras v4 is the recommended STT model (23 languages). Supports transcribe/translate/verbatim/translit/codemix modes.",
             language_code=detected_lang or "unknown",
             snippet_key=("stt", "python"),
             extras={
@@ -284,9 +284,9 @@ def _result(
 _VALID_TTS_MODELS = {"bulbul:v3"}
 _VALID_LLM_MODELS = {"sarvam-105b"}
 _VALID_TRANSLATE_MODELS = {"mayura:v1", "sarvam-translate:v1"}
-_VALID_STT_MODELS = {"saaras:v3"}
+_VALID_STT_MODELS = {"saaras:v4", "saaras:v3"}
 _VALID_STT_MODES = {"transcribe", "translate", "verbatim", "translit", "codemix"}
-_VALID_SAARAS_MODELS = {"saaras:v3", "saaras:v3-realtime", "saaras:v2.5"}
+_VALID_SAARAS_MODELS = {"saaras:v4", "saaras:v3", "saaras:v3-realtime", "saaras:v2.5"}
 _VALID_LANGUAGE_CODES = {lang["code"] for lang in _data.ALL_LANGUAGES} | {"auto", "unknown"}
 _TTS_LANG_CODES = {lang["code"] for lang in _data.LANGUAGES_BY_API["tts"]}
 
@@ -332,10 +332,10 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
     elif endpoint == "/speech-to-text":
         if not body.get("file") and "file" not in body:
             issues.append(_warn("file", "Required (multipart). Pass the audio file separately."))
-        model = body.get("model", "saaras:v3")
+        model = body.get("model", "saaras:v4")
         if model not in _VALID_STT_MODELS:
             issues.append(_err("model", f"'{model}' invalid for STT.",
-                               "Use 'saaras:v3'."))
+                               "Use 'saaras:v4' (or 'saaras:v3')."))
         mode = body.get("mode")
         if mode and mode not in _VALID_STT_MODES:
             issues.append(_err("mode", f"'{mode}' invalid.",

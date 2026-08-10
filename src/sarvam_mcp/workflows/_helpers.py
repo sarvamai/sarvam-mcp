@@ -34,7 +34,7 @@ async def stt_transcribe(
     audio_path: Path,
     *,
     language_code: str = "unknown",
-    model: str = "saaras:v3",
+    model: str = "saaras:v4",
     mode: str = "transcribe",
     metrics: ToolMetrics | None = None,
 ) -> tuple[str, str | None]:
@@ -46,7 +46,7 @@ async def stt_transcribe(
             "language_code": language_code,
             "with_timestamps": "false",
         }
-        if model == "saaras:v3":
+        if model in ("saaras:v4", "saaras:v3"):
             data["mode"] = mode
         body, call = await sc.client.post_multipart("/speech-to-text", data=data, files=files)
     if metrics is not None:
