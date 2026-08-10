@@ -17,6 +17,7 @@ from sarvam_mcp.tools._common import (
     BulbulSpeaker,
     LanguageCode,
     TtsLanguageCode,
+    log_tool_error,
     ready_ctx,
     resolve_file_input,
 )
@@ -57,6 +58,19 @@ def register(mcp: FastMCP) -> None:
             description="`mayura:v1` (11 langs, modes) or `sarvam-translate:v1` (22 langs).",
         ),
         translate_mode: str = Field(default="formal"),
+    ) -> dict[str, Any]:
+        try:
+            return await _sv_dub_impl(
+                ctx, target_language_code, audio_path, audio_base64, audio_url,
+                filename, source_language_code, speaker, translate_model, translate_mode,
+            )
+        except Exception as exc:
+            log_tool_error("sarvam_tools_dub", exc)
+            raise
+
+    async def _sv_dub_impl(
+        ctx, target_language_code, audio_path, audio_base64, audio_url,
+        filename, source_language_code, speaker, translate_model, translate_mode,
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         async with resolve_file_input(

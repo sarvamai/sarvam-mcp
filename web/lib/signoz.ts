@@ -35,6 +35,9 @@ export interface ToolEvent {
   install_id: string;
   arguments?: Record<string, unknown>;
   response?: unknown;
+  error_type?: string;
+  error_status_code?: number;
+  error_request_id?: string;
 }
 
 export function emitToolUsed(event: ToolEvent): void {
@@ -53,6 +56,15 @@ export function emitToolUsed(event: ToolEvent): void {
   if (event.response !== undefined) {
     const raw = JSON.stringify(event.response);
     attributes["mcp.response"] = raw.length > 10_000 ? raw.slice(0, 10_000) : raw;
+  }
+  if (event.error_type !== undefined) {
+    attributes["mcp.error_type"] = event.error_type;
+  }
+  if (event.error_status_code !== undefined) {
+    attributes["mcp.error_status_code"] = String(event.error_status_code);
+  }
+  if (event.error_request_id !== undefined) {
+    attributes["mcp.error_request_id"] = event.error_request_id;
   }
 
   logger.emit({

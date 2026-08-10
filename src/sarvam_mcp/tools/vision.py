@@ -23,7 +23,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
+from sarvam_mcp.tools._common import LanguageCode, log_tool_error, ready_ctx, resolve_file_input
 
 DOC_JOB_BASE = "/doc-digitization/job/v1"
 DOC_JOB_UPLOAD = f"{DOC_JOB_BASE}/upload-files"
@@ -72,6 +72,19 @@ def register(mcp: FastMCP) -> None:
             default="hi-IN",
             description="Primary language of the document (BCP-47). Helps optimize accuracy.",
         ),
+    ) -> dict[str, Any]:
+        try:
+            return await _vision_extract_impl(
+                ctx, document_path, document_base64, document_url,
+                filename, output_format, language_code,
+            )
+        except Exception as exc:
+            log_tool_error("sarvam_tools_vision_extract", exc)
+            raise
+
+    async def _vision_extract_impl(
+        ctx, document_path, document_base64, document_url,
+        filename, output_format, language_code,
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         async with resolve_file_input(
@@ -181,21 +194,25 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         job_id: str = Field(description="The job_id returned by sarvam_tools_vision_extract."),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        with measure_tool() as metrics:
-            status_resp, call = await sc.client.get_json(
-                f"{DOC_JOB_BASE}/{job_id}/status"
-            )
-            metrics.merge(call)
+        try:
+            sc = await ready_ctx(ctx)
+            with measure_tool() as metrics:
+                status_resp, call = await sc.client.get_json(
+                    f"{DOC_JOB_BASE}/{job_id}/status"
+                )
+                metrics.merge(call)
 
-        return {
-            "job_id": job_id,
-            "job_state": status_resp.get("job_state"),
-            "page_metrics": status_resp.get("page_metrics"),
-            "output_storage_path": status_resp.get("output_storage_path"),
-            "raw": status_resp,
-            "observability": metrics.to_response_block(),
-        }
+            return {
+                "job_id": job_id,
+                "job_state": status_resp.get("job_state"),
+                "page_metrics": status_resp.get("page_metrics"),
+                "output_storage_path": status_resp.get("output_storage_path"),
+                "raw": status_resp,
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_vision_job_status", exc)
+            raise
 
 
 def _guess_doc_mime(path: Path) -> str:

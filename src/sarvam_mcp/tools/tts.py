@@ -11,7 +11,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import BulbulSpeaker, TtsLanguageCode, ready_ctx
+from sarvam_mcp.tools._common import BulbulSpeaker, TtsLanguageCode, log_tool_error, ready_ctx
 
 TTS_PATH = "/text-to-speech"
 TTS_STREAM_PATH = "/text-to-speech/stream"  # documented WebSocket path
@@ -60,44 +60,47 @@ def register(mcp: FastMCP) -> None:
             description="`bulbul:v3` (recommended TTS model).",
         ),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        body: dict[str, Any] = {
-            "inputs": [text],
-            "target_language_code": target_language_code,
-            "speaker": speaker,
-            "speech_sample_rate": speech_sample_rate,
-            "pitch": pitch,
-            "pace": pace,
-            "loudness": loudness,
-            "enable_preprocessing": enable_preprocessing,
-            "model": model,
-        }
+        try:
+            sc = await ready_ctx(ctx)
+            body: dict[str, Any] = {
+                "inputs": [text],
+                "target_language_code": target_language_code,
+                "speaker": speaker,
+                "speech_sample_rate": speech_sample_rate,
+                "pitch": pitch,
+                "pace": pace,
+                "loudness": loudness,
+                "enable_preprocessing": enable_preprocessing,
+                "model": model,
+            }
 
-        with measure_tool() as metrics:
-            payload, call = await sc.client.post_json(TTS_PATH, json_body=body)
-            metrics.merge(call)
+            with measure_tool() as metrics:
+                payload, call = await sc.client.post_json(TTS_PATH, json_body=body)
+                metrics.merge(call)
 
-        # Sarvam returns: {"audios": ["<base64-wav>", ...], "request_id": "..."}
-        audios = payload.get("audios") or []
-        if not audios:
-            raise RuntimeError(f"TTS response had no audio. Raw: {payload!r}")
-        wav_bytes = base64.b64decode(audios[0])
+            audios = payload.get("audios") or []
+            if not audios:
+                raise RuntimeError(f"TTS response had no audio. Raw: {payload!r}")
+            wav_bytes = base64.b64decode(audios[0])
 
-        filename = f"sarvam-tts-{uuid.uuid4().hex[:8]}.wav"
-        stored = await sc.audio_sink.store(
-            wav_bytes, filename=filename, mime_type="audio/wav"
-        )
+            filename = f"sarvam-tts-{uuid.uuid4().hex[:8]}.wav"
+            stored = await sc.audio_sink.store(
+                wav_bytes, filename=filename, mime_type="audio/wav"
+            )
 
-        return {
-            "file_path": stored.file_path,
-            "resource_uri": stored.resource_uri,
-            "base64_data": stored.base64_data,
-            "mime_type": stored.mime_type,
-            "size_bytes": stored.size_bytes,
-            "speaker": speaker,
-            "language": target_language_code,
-            "observability": metrics.to_response_block(),
-        }
+            return {
+                "file_path": stored.file_path,
+                "resource_uri": stored.resource_uri,
+                "base64_data": stored.base64_data,
+                "mime_type": stored.mime_type,
+                "size_bytes": stored.size_bytes,
+                "speaker": speaker,
+                "language": target_language_code,
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_tts_speak", exc)
+            raise
 
     @mcp.tool(
         name="sarvam_tools_tts_stream",
@@ -116,6 +119,13 @@ def register(mcp: FastMCP) -> None:
         speech_sample_rate: SampleRate = Field(default=24000),
         model: TtsModel = Field(default="bulbul:v3"),
     ) -> dict[str, Any]:
+        try:
+            return await _tts_stream_impl(ctx, text, target_language_code, speaker, speech_sample_rate, model)
+        except Exception as exc:
+            log_tool_error("sarvam_tools_tts_stream", exc)
+            raise
+
+    async def _tts_stream_impl(ctx, text, target_language_code, speaker, speech_sample_rate, model):
         sc = await ready_ctx(ctx)
         ws_url = sc.config.base_url.replace("http", "ws", 1) + TTS_STREAM_PATH
 

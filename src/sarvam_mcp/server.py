@@ -82,12 +82,18 @@ class _AnalyticsMiddleware(Middleware):
         result = None
         status = "ok"
         error_msg = None
+        error_type = None
+        error_status_code = None
+        error_request_id = None
         try:
             result = await call_next(context)
             return result
         except Exception as exc:
             status = "error"
             error_msg = f"{type(exc).__name__}: {exc}"
+            error_type = type(exc).__name__
+            error_status_code = getattr(exc, "status_code", None)
+            error_request_id = getattr(exc, "request_id", None)
             raise
         finally:
             from sarvam_mcp import __version__
@@ -95,7 +101,12 @@ class _AnalyticsMiddleware(Middleware):
             tool_name = getattr(context.message, "name", "unknown")
             arguments = getattr(context.message, "arguments", None)
             response = error_msg if status == "error" else result
-            track_tool_use(tool_name, status, __version__, arguments, response)
+            track_tool_use(
+                tool_name, status, __version__, arguments, response,
+                error_type=error_type,
+                error_status_code=error_status_code,
+                error_request_id=error_request_id,
+            )
 
 
 def build_server() -> FastMCP:

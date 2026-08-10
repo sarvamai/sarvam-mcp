@@ -11,7 +11,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
+from sarvam_mcp.tools._common import LanguageCode, log_tool_error, ready_ctx, resolve_file_input
 
 STT_PATH = "/speech-to-text"
 STT_TRANSLATE_PATH = "/speech-to-text-translate"
@@ -94,38 +94,42 @@ def register(mcp: FastMCP) -> None:
             ),
         ),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        async with resolve_file_input(
-            file_path=audio_path, file_base64=audio_base64,
-            file_url=audio_url, filename=filename,
-        ) as path:
-            with measure_tool() as metrics:
-                with path.open("rb") as fh:
-                    files = {"file": (path.name, fh, _guess_audio_mime(path))}
-                    data: dict[str, Any] = {
-                        "model": model,
-                        "language_code": language_code,
-                        "with_timestamps": str(with_timestamps).lower(),
-                    }
-                    if model == "saaras:v3" and mode != "transcribe":
-                        data["mode"] = mode
-                    elif model == "saaras:v3":
-                        data["mode"] = "transcribe"
-                    if input_audio_codec is not None:
-                        data["input_audio_codec"] = input_audio_codec
-                    payload, call = await sc.client.post_multipart(
-                        STT_PATH, data=data, files=files
-                    )
-                metrics.merge(call)
+        try:
+            sc = await ready_ctx(ctx)
+            async with resolve_file_input(
+                file_path=audio_path, file_base64=audio_base64,
+                file_url=audio_url, filename=filename,
+            ) as path:
+                with measure_tool() as metrics:
+                    with path.open("rb") as fh:
+                        files = {"file": (path.name, fh, _guess_audio_mime(path))}
+                        data: dict[str, Any] = {
+                            "model": model,
+                            "language_code": language_code,
+                            "with_timestamps": str(with_timestamps).lower(),
+                        }
+                        if model == "saaras:v3" and mode != "transcribe":
+                            data["mode"] = mode
+                        elif model == "saaras:v3":
+                            data["mode"] = "transcribe"
+                        if input_audio_codec is not None:
+                            data["input_audio_codec"] = input_audio_codec
+                        payload, call = await sc.client.post_multipart(
+                            STT_PATH, data=data, files=files
+                        )
+                    metrics.merge(call)
 
-        return {
-            "transcript": payload.get("transcript", ""),
-            "language_code": payload.get("language_code"),
-            "language_probability": payload.get("language_probability"),
-            "diarized_transcript": payload.get("diarized_transcript"),
-            "timestamps": payload.get("timestamps"),
-            "observability": metrics.to_response_block(),
-        }
+            return {
+                "transcript": payload.get("transcript", ""),
+                "language_code": payload.get("language_code"),
+                "language_probability": payload.get("language_probability"),
+                "diarized_transcript": payload.get("diarized_transcript"),
+                "timestamps": payload.get("timestamps"),
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_stt_transcribe", exc)
+            raise
 
     @mcp.tool(
         name="sarvam_tools_stt_translate",
@@ -154,34 +158,38 @@ def register(mcp: FastMCP) -> None:
             ),
         ),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        async with resolve_file_input(
-            file_path=audio_path, file_base64=audio_base64,
-            file_url=audio_url, filename=filename,
-        ) as path:
-            with measure_tool() as metrics:
-                with path.open("rb") as fh:
-                    files = {"file": (path.name, fh, _guess_audio_mime(path))}
-                    data: dict[str, Any] = {
-                        "model": model,
-                        "with_diarization": str(with_diarization).lower(),
-                    }
-                    payload, call = await sc.client.post_multipart(
-                        STT_TRANSLATE_PATH, data=data, files=files
-                    )
-                metrics.merge(call)
+        try:
+            sc = await ready_ctx(ctx)
+            async with resolve_file_input(
+                file_path=audio_path, file_base64=audio_base64,
+                file_url=audio_url, filename=filename,
+            ) as path:
+                with measure_tool() as metrics:
+                    with path.open("rb") as fh:
+                        files = {"file": (path.name, fh, _guess_audio_mime(path))}
+                        data: dict[str, Any] = {
+                            "model": model,
+                            "with_diarization": str(with_diarization).lower(),
+                        }
+                        payload, call = await sc.client.post_multipart(
+                            STT_TRANSLATE_PATH, data=data, files=files
+                        )
+                    metrics.merge(call)
 
-        return {
-            "transcript": payload.get("transcript", ""),
-            "language_code": payload.get("language_code"),
-            "diarized_transcript": payload.get("diarized_transcript"),
-            "deprecation_notice": (
-                "This tool uses the legacy /speech-to-text-translate endpoint. "
-                "Migrate to sarvam_tools_stt_transcribe with "
-                "mode='translate' and model='saaras:v3'."
-            ),
-            "observability": metrics.to_response_block(),
-        }
+            return {
+                "transcript": payload.get("transcript", ""),
+                "language_code": payload.get("language_code"),
+                "diarized_transcript": payload.get("diarized_transcript"),
+                "deprecation_notice": (
+                    "This tool uses the legacy /speech-to-text-translate endpoint. "
+                    "Migrate to sarvam_tools_stt_transcribe with "
+                    "mode='translate' and model='saaras:v3'."
+                ),
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_stt_translate", exc)
+            raise
 
     @mcp.tool(
         name="sarvam_tools_stt_batch_submit",
@@ -229,6 +237,21 @@ def register(mcp: FastMCP) -> None:
             description="Hint for diarization: expected number of speakers.",
         ),
         model: SttModel = Field(default="saaras:v3"),
+    ) -> dict[str, Any]:
+        try:
+            return await _stt_batch_submit_impl(
+                ctx, audio_path, audio_base64, audio_url, filename,
+                language_code, mode, with_timestamps, with_diarization,
+                num_speakers, model,
+            )
+        except Exception as exc:
+            log_tool_error("sarvam_tools_stt_batch_submit", exc)
+            raise
+
+    async def _stt_batch_submit_impl(
+        ctx, audio_path, audio_base64, audio_url, filename,
+        language_code, mode, with_timestamps, with_diarization,
+        num_speakers, model,
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         async with resolve_file_input(
@@ -356,22 +379,26 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         job_id: str = Field(description="The job_id returned by sarvam_stt_batch_submit."),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        with measure_tool() as metrics:
-            payload, call = await sc.client.get_json(
-                f"{STT_JOB_BASE}/{job_id}/status"
-            )
-            metrics.merge(call)
+        try:
+            sc = await ready_ctx(ctx)
+            with measure_tool() as metrics:
+                payload, call = await sc.client.get_json(
+                    f"{STT_JOB_BASE}/{job_id}/status"
+                )
+                metrics.merge(call)
 
-        result = payload.get("result") or {}
-        return {
-            "job_id": job_id,
-            "job_state": payload.get("job_state"),
-            "transcript": result.get("transcript") or payload.get("transcript"),
-            "download_urls": payload.get("download_urls"),
-            "raw": payload,
-            "observability": metrics.to_response_block(),
-        }
+            result = payload.get("result") or {}
+            return {
+                "job_id": job_id,
+                "job_state": payload.get("job_state"),
+                "transcript": result.get("transcript") or payload.get("transcript"),
+                "download_urls": payload.get("download_urls"),
+                "raw": payload,
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_stt_batch_status", exc)
+            raise
 
 
 def _guess_audio_mime(path: Path) -> str:

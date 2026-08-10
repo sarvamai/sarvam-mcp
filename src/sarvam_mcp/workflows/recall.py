@@ -15,7 +15,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import LanguageCode, SarvamLLM, ready_ctx
+from sarvam_mcp.tools._common import LanguageCode, SarvamLLM, log_tool_error, ready_ctx
 from sarvam_mcp.workflows._helpers import llm_complete, stt_transcribe
 
 AUDIO_EXTS = {".wav", ".mp3", ".ogg", ".flac", ".m4a", ".webm"}
@@ -58,6 +58,13 @@ def register(mcp: FastMCP) -> None:
             description="`sarvam-105b` (flagship, the only current chat model).",
         ),
     ) -> dict[str, Any]:
+        try:
+            return await _sv_recall_impl(ctx, question, paths, stt_language, max_files, llm_model)
+        except Exception as exc:
+            log_tool_error("sarvam_tools_recall", exc)
+            raise
+
+    async def _sv_recall_impl(ctx, question, paths, stt_language, max_files, llm_model):
         sc = await ready_ctx(ctx)
         files = _gather_files(paths, max_files)
         if not files:

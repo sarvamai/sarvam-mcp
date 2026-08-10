@@ -11,8 +11,7 @@ import httpx
 
 T = TypeVar("T")
 
-# Status codes worth retrying. 429 has its own dedicated handling.
-RETRYABLE_STATUS = {500, 502, 503, 504}
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 async def retry_async(
@@ -26,7 +25,9 @@ async def retry_async(
     Retries on:
     - ``httpx.TransportError`` (connection-level)
     - ``httpx.HTTPStatusError`` with status in ``RETRYABLE_STATUS``
+      (includes 429 rate limits and 5xx server errors)
 
+    For 429 responses, respects the ``Retry-After`` header if present.
     Anything else propagates immediately.
     """
     last_exc: Exception | None = None
@@ -37,6 +38,11 @@ async def retry_async(
             if exc.response.status_code not in RETRYABLE_STATUS or attempt == attempts - 1:
                 raise
             last_exc = exc
+            if exc.response.status_code == 429:
+                retry_after = _parse_retry_after(exc.response.headers.get("retry-after"))
+                if retry_after is not None:
+                    await asyncio.sleep(min(retry_after, 30.0))
+                    continue
         except httpx.TransportError as exc:
             if attempt == attempts - 1:
                 raise
@@ -44,6 +50,15 @@ async def retry_async(
         delay = base_delay * (2**attempt) + random.uniform(0, 0.2)
         await asyncio.sleep(delay)
 
-    # Unreachable: loop either returns or raises. Guard for type-checkers.
     assert last_exc is not None
     raise last_exc
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """Parse Retry-After header value as seconds."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None

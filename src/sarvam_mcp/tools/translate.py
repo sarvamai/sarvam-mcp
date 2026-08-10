@@ -14,6 +14,7 @@ from sarvam_mcp.tools._common import (
     OutputScript,
     SpeakerGender,
     TranslateMode,
+    log_tool_error,
     ready_ctx,
 )
 
@@ -63,30 +64,33 @@ def register(mcp: FastMCP) -> None:
         ),
         enable_preprocessing: bool = Field(default=True),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        # Upstream /translate accepts "auto", not "unknown".
-        src = "auto" if source_language_code == "unknown" else source_language_code
-        body: dict[str, Any] = {
-            "input": input,
-            "source_language_code": src,
-            "target_language_code": target_language_code,
-            "model": model,
-            "numerals_format": numerals_format,
-            "enable_preprocessing": enable_preprocessing,
-        }
-        if model == "mayura:v1":
-            body["mode"] = mode
-            if output_script:
-                body["output_script"] = output_script
-        if speaker_gender:
-            body["speaker_gender"] = speaker_gender
+        try:
+            sc = await ready_ctx(ctx)
+            src = "auto" if source_language_code == "unknown" else source_language_code
+            body: dict[str, Any] = {
+                "input": input,
+                "source_language_code": src,
+                "target_language_code": target_language_code,
+                "model": model,
+                "numerals_format": numerals_format,
+                "enable_preprocessing": enable_preprocessing,
+            }
+            if model == "mayura:v1":
+                body["mode"] = mode
+                if output_script:
+                    body["output_script"] = output_script
+            if speaker_gender:
+                body["speaker_gender"] = speaker_gender
 
-        with measure_tool() as metrics:
-            payload, call = await sc.client.post_json(TRANSLATE_PATH, json_body=body)
-            metrics.merge(call)
+            with measure_tool() as metrics:
+                payload, call = await sc.client.post_json(TRANSLATE_PATH, json_body=body)
+                metrics.merge(call)
 
-        return {
-            "translated_text": payload.get("translated_text", ""),
-            "source_language_code": payload.get("source_language_code"),
-            "observability": metrics.to_response_block(),
-        }
+            return {
+                "translated_text": payload.get("translated_text", ""),
+                "source_language_code": payload.get("source_language_code"),
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_translate", exc)
+            raise

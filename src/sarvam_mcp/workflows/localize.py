@@ -16,7 +16,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import LanguageCode, ready_ctx
+from sarvam_mcp.tools._common import LanguageCode, log_tool_error, ready_ctx
 from sarvam_mcp.workflows._helpers import translate_text
 
 # Cap protects against runaway translation cost on a misuse.
@@ -66,6 +66,19 @@ def register(mcp: FastMCP) -> None:
             le=2000,
             description="Hard cap on values translated per call.",
         ),
+    ) -> dict[str, Any]:
+        try:
+            return await _sv_localize_impl(
+                ctx, source_path, target_language_code, source_language_code,
+                output_path, model, max_strings,
+            )
+        except Exception as exc:
+            log_tool_error("sarvam_tools_localize", exc)
+            raise
+
+    async def _sv_localize_impl(
+        ctx, source_path, target_language_code, source_language_code,
+        output_path, model, max_strings,
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         src = Path(source_path).expanduser()

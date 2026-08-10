@@ -1,0 +1,147 @@
+{
+  "uuid": "019ed66e-45ff-7bf5-8db2-4a5f709ee7de",
+  "dashboard": {
+    "title": "Sarvam MCP — Tool Usage Analytics",
+    "description": "Tracks MCP tool invocations: volume, error rate, tool breakdown, installs, versions, and OS distribution. Includes error type and status code breakdowns.",
+    "tags": ["sarvam", "mcp", "tool-usage"],
+    "variables": {},
+    "layout": [
+      {"h": 2, "i": "total-calls", "moved": false, "static": false, "w": 3, "x": 0, "y": 0},
+      {"h": 2, "i": "unique-installs", "moved": false, "static": false, "w": 3, "x": 3, "y": 0},
+      {"h": 2, "i": "error-count", "moved": false, "static": false, "w": 3, "x": 6, "y": 0},
+      {"h": 2, "i": "success-count", "moved": false, "static": false, "w": 3, "x": 9, "y": 0},
+      {"h": 3, "i": "calls-over-time", "moved": false, "static": false, "w": 12, "x": 0, "y": 2},
+      {"h": 3, "i": "by-tool", "moved": false, "static": false, "w": 6, "x": 0, "y": 5},
+      {"h": 3, "i": "by-status", "moved": false, "static": false, "w": 6, "x": 6, "y": 5},
+      {"h": 3, "i": "by-version", "moved": false, "static": false, "w": 4, "x": 0, "y": 8},
+      {"h": 3, "i": "by-python", "moved": false, "static": false, "w": 4, "x": 4, "y": 8},
+      {"h": 3, "i": "by-os", "moved": false, "static": false, "w": 4, "x": 8, "y": 8},
+      {"h": 2, "i": "error-diagnostics-row", "moved": false, "static": false, "w": 12, "x": 0, "y": 11},
+      {"h": 6, "i": "errors-by-type", "moved": false, "static": false, "w": 6, "x": 0, "y": 13},
+      {"h": 6, "i": "errors-by-status-code", "moved": false, "static": false, "w": 6, "x": 6, "y": 13},
+      {"h": 7, "i": "error-type-by-tool", "moved": false, "static": false, "w": 12, "x": 0, "y": 19},
+      {"h": 6, "i": "error-status-code-trend", "moved": false, "static": false, "w": 12, "x": 0, "y": 26}
+    ],
+    "widgets": [
+      {
+        "description": "Total number of MCP tool invocations",
+        "id": "total-calls",
+        "panelTypes": "value",
+        "query": {"builder": {"queryData": [{"dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used'"}, "groupBy": [], "having": [], "queryName": "A", "stepInterval": null, "orderBy": [], "selectColumns": [], "functions": [], "aggregations": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Total Tool Calls",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Distinct install_id values (anonymous unique users)",
+        "id": "unique-installs",
+        "panelTypes": "value",
+        "query": {"builder": {"queryData": [{"aggregations": [{"expression": "count_distinct(mcp.install_id)"}], "dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used'"}, "groupBy": [], "having": [], "queryName": "A", "stepInterval": null, "orderBy": [], "selectColumns": [], "functions": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Unique Installs",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Tool calls that returned an error",
+        "id": "error-count",
+        "panelTypes": "value",
+        "query": {"builder": {"queryData": [{"dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "(body = 'tool_used' AND mcp.status = 'error')"}, "groupBy": [], "having": [], "queryName": "A", "stepInterval": null, "orderBy": [], "selectColumns": [], "functions": [], "aggregations": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Errors",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Tool calls that completed successfully",
+        "id": "success-count",
+        "panelTypes": "value",
+        "query": {"builder": {"queryData": [{"dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "(body = 'tool_used' AND mcp.status = 'ok')"}, "groupBy": [], "having": [], "queryName": "A", "stepInterval": null, "orderBy": [], "selectColumns": [], "functions": [], "aggregations": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Successes",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Timeseries of tool calls, split by status",
+        "id": "calls-over-time",
+        "panelTypes": "graph",
+        "query": {"builder": {"queryData": [{"dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' mcp.status EXISTS"}, "groupBy": [{"dataType": "string", "isColumn": false, "key": "mcp.status", "type": "tag"}], "having": [], "queryName": "A", "stepInterval": null, "orderBy": [], "selectColumns": [], "functions": [], "aggregations": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Tool Calls Over Time",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Which MCP tools are used most",
+        "id": "by-tool",
+        "panelTypes": "table",
+        "query": {"builder": {"queryData": [{"dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' mcp.tool EXISTS"}, "groupBy": [{"dataType": "string", "isColumn": false, "key": "mcp.tool", "type": "tag"}], "having": [], "orderBy": [{"columnName": "#SIGNOZ_VALUE", "order": "desc"}], "queryName": "A", "stepInterval": null, "selectColumns": [], "functions": [], "aggregations": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Calls by Tool",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "ok vs error breakdown",
+        "id": "by-status",
+        "panelTypes": "table",
+        "query": {"builder": {"queryData": [{"dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' mcp.status EXISTS"}, "groupBy": [{"dataType": "string", "isColumn": false, "key": "mcp.status", "type": "tag"}], "having": [], "orderBy": [{"columnName": "#SIGNOZ_VALUE", "order": "desc"}], "queryName": "A", "stepInterval": null, "selectColumns": [], "functions": [], "aggregations": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Calls by Status",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Which sarvam-mcp versions are in use",
+        "id": "by-version",
+        "panelTypes": "table",
+        "query": {"builder": {"queryData": [{"dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' mcp.version EXISTS"}, "groupBy": [{"dataType": "string", "isColumn": false, "key": "mcp.version", "type": "tag"}], "having": [], "orderBy": [{"columnName": "#SIGNOZ_VALUE", "order": "desc"}], "queryName": "A", "stepInterval": null, "selectColumns": [], "functions": [], "aggregations": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Package Version Distribution",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Python versions across installs",
+        "id": "by-python",
+        "panelTypes": "table",
+        "query": {"builder": {"queryData": [{"dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' mcp.python EXISTS"}, "groupBy": [{"dataType": "string", "isColumn": false, "key": "mcp.python", "type": "tag"}], "having": [], "orderBy": [{"columnName": "#SIGNOZ_VALUE", "order": "desc"}], "queryName": "A", "stepInterval": null, "selectColumns": [], "functions": [], "aggregations": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Python Version Distribution",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Operating system + architecture breakdown",
+        "id": "by-os",
+        "panelTypes": "table",
+        "query": {"builder": {"queryData": [{"dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' mcp.os EXISTS"}, "groupBy": [{"dataType": "string", "isColumn": false, "key": "mcp.os", "type": "tag"}], "having": [], "orderBy": [{"columnName": "#SIGNOZ_VALUE", "order": "desc"}], "queryName": "A", "stepInterval": null, "selectColumns": [], "functions": [], "aggregations": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "OS Distribution",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "id": "error-diagnostics-row",
+        "panelTypes": "row",
+        "title": "Error Diagnostics",
+        "query": {"builder": {"queryData": [], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Breakdown of errors by exception type (SarvamAuthError, ValueError, etc.)",
+        "id": "errors-by-type",
+        "panelTypes": "pie",
+        "query": {"builder": {"queryData": [{"aggregations": [{"expression": "count()"}], "dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' AND mcp.status = 'error' AND mcp.error_type EXISTS"}, "groupBy": [{"dataType": "string", "key": "mcp.error_type", "type": "tag"}], "legend": "{{mcp.error_type}}", "having": [], "queryName": "A", "stepInterval": null, "orderBy": [], "selectColumns": [], "functions": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Errors by Type",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Distribution of HTTP status codes on error responses (400, 401, 429, 500, etc.)",
+        "id": "errors-by-status-code",
+        "panelTypes": "pie",
+        "query": {"builder": {"queryData": [{"aggregations": [{"expression": "count()"}], "dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' AND mcp.status = 'error' AND mcp.error_status_code EXISTS"}, "groupBy": [{"dataType": "string", "key": "mcp.error_status_code", "type": "tag"}], "legend": "{{mcp.error_status_code}}", "having": [], "queryName": "A", "stepInterval": null, "orderBy": [], "selectColumns": [], "functions": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Errors by HTTP Status Code",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Which tools fail with which error types — for root cause analysis",
+        "id": "error-type-by-tool",
+        "panelTypes": "table",
+        "query": {"builder": {"queryData": [{"aggregations": [{"expression": "count() as 'Error Count'"}], "dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' AND mcp.status = 'error' AND mcp.error_type EXISTS"}, "groupBy": [{"dataType": "string", "key": "mcp.tool", "type": "tag", "isColumn": true}, {"dataType": "string", "key": "mcp.error_type", "type": "tag"}], "having": [], "orderBy": [{"columnName": "#SIGNOZ_VALUE", "order": "desc"}], "queryName": "A", "stepInterval": null, "selectColumns": [], "functions": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Error Type x Tool Breakdown",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      },
+      {
+        "description": "Error trend over time broken down by HTTP status code (400, 401, 429, 500, etc.)",
+        "id": "error-status-code-trend",
+        "panelTypes": "graph",
+        "query": {"builder": {"queryData": [{"aggregations": [{"expression": "count()"}], "dataSource": "logs", "disabled": false, "expression": "A", "filter": {"expression": "body = 'tool_used' AND mcp.status = 'error' AND mcp.error_status_code EXISTS"}, "groupBy": [{"dataType": "string", "key": "mcp.error_status_code", "type": "tag"}], "legend": "{{mcp.error_status_code}}", "having": [], "queryName": "A", "stepInterval": null, "orderBy": [], "selectColumns": [], "functions": []}], "queryFormulas": []}, "queryType": "builder", "promql": [], "clickhouse_sql": []},
+        "title": "Errors Over Time by Status Code",
+        "selectedLogFields": [], "selectedTracesFields": [], "thresholds": [], "contextLinks": {"linksData": []}
+      }
+    ]
+  }
+}

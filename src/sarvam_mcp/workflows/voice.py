@@ -17,6 +17,7 @@ from sarvam_mcp.tools._common import (
     LanguageCode,
     SarvamLLM,
     TtsLanguageCode,
+    log_tool_error,
     ready_ctx,
     resolve_file_input,
 )
@@ -69,6 +70,19 @@ def register(mcp: FastMCP) -> None:
             default="sarvam-105b",
             description="`sarvam-105b` (flagship, the only current chat model).",
         ),
+    ) -> dict[str, Any]:
+        try:
+            return await _sv_voice_impl(
+                ctx, audio_path, audio_base64, audio_url, filename,
+                system_prompt, input_language, reply_language, speaker, llm_model,
+            )
+        except Exception as exc:
+            log_tool_error("sarvam_tools_voice", exc)
+            raise
+
+    async def _sv_voice_impl(
+        ctx, audio_path, audio_base64, audio_url, filename,
+        system_prompt, input_language, reply_language, speaker, llm_model,
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         async with resolve_file_input(

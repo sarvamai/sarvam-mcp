@@ -9,7 +9,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import ready_ctx
+from sarvam_mcp.tools._common import log_tool_error, ready_ctx
 
 LID_PATH = "/text-lid"
 ANALYTICS_PATH = "/text-analytics"
@@ -33,15 +33,19 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         input: str = Field(description="Text whose language to identify."),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        with measure_tool() as metrics:
-            payload, call = await sc.client.post_json(LID_PATH, json_body={"input": input})
-            metrics.merge(call)
-        return {
-            "language_code": payload.get("language_code"),
-            "script_code": payload.get("script_code"),
-            "observability": metrics.to_response_block(),
-        }
+        try:
+            sc = await ready_ctx(ctx)
+            with measure_tool() as metrics:
+                payload, call = await sc.client.post_json(LID_PATH, json_body={"input": input})
+                metrics.merge(call)
+            return {
+                "language_code": payload.get("language_code"),
+                "script_code": payload.get("script_code"),
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_identify_language", exc)
+            raise
 
     @mcp.tool(
         name="sarvam_tools_text_analytics",
@@ -81,14 +85,18 @@ def register(mcp: FastMCP) -> None:
                 )
 
         # Endpoint is multipart, not JSON. `questions` is a JSON-stringified list.
-        with measure_tool() as metrics:
-            payload, call = await sc.client.post_multipart(
-                ANALYTICS_PATH,
-                data={"text": text, "questions": json.dumps(questions)},
-            )
-            metrics.merge(call)
-        return {
-            "answers": payload.get("answers", []),
-            "raw": payload,
-            "observability": metrics.to_response_block(),
-        }
+        try:
+            with measure_tool() as metrics:
+                payload, call = await sc.client.post_multipart(
+                    ANALYTICS_PATH,
+                    data={"text": text, "questions": json.dumps(questions)},
+                )
+                metrics.merge(call)
+            return {
+                "answers": payload.get("answers", []),
+                "raw": payload,
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_text_analytics", exc)
+            raise

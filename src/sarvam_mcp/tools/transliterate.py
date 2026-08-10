@@ -8,7 +8,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import LanguageCode, NumeralsFormat, ready_ctx
+from sarvam_mcp.tools._common import LanguageCode, NumeralsFormat, log_tool_error, ready_ctx
 
 TRANSLITERATE_PATH = "/transliterate"
 
@@ -56,12 +56,16 @@ def register(mcp: FastMCP) -> None:
         if spoken_form_numerals_language:
             body["spoken_form_numerals_language"] = spoken_form_numerals_language
 
-        with measure_tool() as metrics:
-            payload, call = await sc.client.post_json(TRANSLITERATE_PATH, json_body=body)
-            metrics.merge(call)
+        try:
+            with measure_tool() as metrics:
+                payload, call = await sc.client.post_json(TRANSLITERATE_PATH, json_body=body)
+                metrics.merge(call)
 
-        return {
-            "transliterated_text": payload.get("transliterated_text", ""),
-            "source_language_code": payload.get("source_language_code"),
-            "observability": metrics.to_response_block(),
-        }
+            return {
+                "transliterated_text": payload.get("transliterated_text", ""),
+                "source_language_code": payload.get("source_language_code"),
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_transliterate", exc)
+            raise

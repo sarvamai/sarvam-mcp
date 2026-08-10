@@ -7,6 +7,7 @@ so tool modules can stay short and focused on their endpoint shape.
 from __future__ import annotations
 
 import base64
+import logging
 import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -17,6 +18,25 @@ import httpx
 from fastmcp import Context
 
 from sarvam_mcp._registry import ServerContext
+
+logger = logging.getLogger("sarvam_mcp")
+
+
+def log_tool_error(tool_name: str, exc: Exception) -> None:
+    """Log a structured error for a tool failure. Call from except blocks, then re-raise."""
+    logger.error(
+        "Tool %s failed: %s: %s",
+        tool_name,
+        type(exc).__name__,
+        exc,
+        extra={
+            "tool": tool_name,
+            "error_type": type(exc).__name__,
+            "status_code": getattr(exc, "status_code", None),
+            "request_id": getattr(exc, "request_id", None),
+        },
+        exc_info=True,
+    )
 
 MAX_FILE_BYTES = 25 * 1024 * 1024  # 25 MB
 
@@ -59,7 +79,12 @@ async def resolve_file_input(
     tmp_path = Path(tmp.name)
     try:
         if file_base64 is not None:
-            data = base64.b64decode(file_base64)
+            try:
+                data = base64.b64decode(file_base64)
+            except Exception:
+                raise ValueError(
+                    "Invalid base64 audio data. Ensure the input is properly base64-encoded."
+                )
             if len(data) > max_bytes:
                 raise ValueError(
                     f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
@@ -69,17 +94,26 @@ async def resolve_file_input(
             yield tmp_path
         else:
             assert file_url is not None
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-                async with client.stream("GET", file_url) as resp:
-                    resp.raise_for_status()
-                    downloaded = 0
-                    async for chunk in resp.aiter_bytes(chunk_size=65536):
-                        downloaded += len(chunk)
-                        if downloaded > max_bytes:
-                            raise ValueError(
-                                f"Downloaded file exceeds {max_bytes} byte limit."
-                            )
-                        tmp.write(chunk)
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
+                    async with client.stream("GET", file_url) as resp:
+                        resp.raise_for_status()
+                        downloaded = 0
+                        async for chunk in resp.aiter_bytes(chunk_size=65536):
+                            downloaded += len(chunk)
+                            if downloaded > max_bytes:
+                                raise ValueError(
+                                    f"Downloaded file exceeds {max_bytes} byte limit."
+                                )
+                            tmp.write(chunk)
+            except httpx.HTTPStatusError as exc:
+                raise ValueError(
+                    f"Failed to download file from URL (HTTP {exc.response.status_code}): {file_url}"
+                ) from exc
+            except httpx.TransportError as exc:
+                raise ValueError(
+                    f"Could not reach the file URL: {file_url} ({type(exc).__name__}: {exc})"
+                ) from exc
             tmp.close()
             yield tmp_path
     finally:

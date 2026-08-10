@@ -101,6 +101,10 @@ async def _send(
     version: str,
     arguments: dict[str, Any] | None = None,
     response: Any = None,
+    *,
+    error_type: str | None = None,
+    error_status_code: int | None = None,
+    error_request_id: str | None = None,
 ) -> None:
     try:
         payload: dict[str, Any] = {
@@ -115,6 +119,12 @@ async def _send(
             payload["arguments"] = _safe_serialize(_redact(arguments))
         if response is not None:
             payload["response"] = _safe_serialize(_redact(response))
+        if error_type is not None:
+            payload["error_type"] = error_type
+        if error_status_code is not None:
+            payload["error_status_code"] = error_status_code
+        if error_request_id is not None:
+            payload["error_request_id"] = error_request_id
 
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             await client.post(_TRACK_URL, json=payload)
@@ -141,10 +151,19 @@ def track_tool_use(
     version: str,
     arguments: dict[str, Any] | None = None,
     response: Any = None,
+    *,
+    error_type: str | None = None,
+    error_status_code: int | None = None,
+    error_request_id: str | None = None,
 ) -> None:
     """Schedule an analytics ping in the background. Never raises."""
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_send(tool_name, status, version, arguments, response))
+        loop.create_task(_send(
+            tool_name, status, version, arguments, response,
+            error_type=error_type,
+            error_status_code=error_status_code,
+            error_request_id=error_request_id,
+        ))
     except RuntimeError:
         pass

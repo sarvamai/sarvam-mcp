@@ -14,7 +14,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import ready_ctx
+from sarvam_mcp.tools._common import log_tool_error, ready_ctx
 
 PRONDICT_BASE = "/text-to-speech/pronunciation-dictionary"
 
@@ -31,15 +31,19 @@ def register(mcp: FastMCP) -> None:
     async def sarvam_pronunciation_list(
         ctx: Context,
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        with measure_tool() as metrics:
-            payload, call = await sc.client.get_json(PRONDICT_BASE)
-            metrics.merge(call)
-        return {
-            "dictionary_count": payload.get("dictionary_count", 0),
-            "dictionaries": payload.get("dictionaries", []),
-            "observability": metrics.to_response_block(),
-        }
+        try:
+            sc = await ready_ctx(ctx)
+            with measure_tool() as metrics:
+                payload, call = await sc.client.get_json(PRONDICT_BASE)
+                metrics.merge(call)
+            return {
+                "dictionary_count": payload.get("dictionary_count", 0),
+                "dictionaries": payload.get("dictionaries", []),
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_pronunciation_list", exc)
+            raise
 
     @mcp.tool(
         name="sarvam_tools_pronunciation_get",
@@ -53,17 +57,21 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         dictionary_id: str = Field(description="The pronunciation dictionary ID."),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        with measure_tool() as metrics:
-            payload, call = await sc.client.get_json(
-                f"{PRONDICT_BASE}/{dictionary_id}"
-            )
-            metrics.merge(call)
-        return {
-            "dictionary_id": dictionary_id,
-            "raw": payload,
-            "observability": metrics.to_response_block(),
-        }
+        try:
+            sc = await ready_ctx(ctx)
+            with measure_tool() as metrics:
+                payload, call = await sc.client.get_json(
+                    f"{PRONDICT_BASE}/{dictionary_id}"
+                )
+                metrics.merge(call)
+            return {
+                "dictionary_id": dictionary_id,
+                "raw": payload,
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_pronunciation_get", exc)
+            raise
 
     @mcp.tool(
         name="sarvam_tools_pronunciation_create",
@@ -88,19 +96,23 @@ def register(mcp: FastMCP) -> None:
             description="BCP-47 language code for these entries, e.g. 'hi-IN', 'en-IN', 'ta-IN'.",
         ),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        dictionary = {"pronunciations": {language_code: entries}}
-        dict_bytes = json.dumps(dictionary, ensure_ascii=False).encode("utf-8")
-        with measure_tool() as metrics:
-            payload, call = await sc.client.post_multipart(
-                PRONDICT_BASE,
-                files={"file": ("dictionary.json", dict_bytes, "application/json")},
-            )
-            metrics.merge(call)
-        return {
-            "raw": payload,
-            "observability": metrics.to_response_block(),
-        }
+        try:
+            sc = await ready_ctx(ctx)
+            dictionary = {"pronunciations": {language_code: entries}}
+            dict_bytes = json.dumps(dictionary, ensure_ascii=False).encode("utf-8")
+            with measure_tool() as metrics:
+                payload, call = await sc.client.post_multipart(
+                    PRONDICT_BASE,
+                    files={"file": ("dictionary.json", dict_bytes, "application/json")},
+                )
+                metrics.merge(call)
+            return {
+                "raw": payload,
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_pronunciation_create", exc)
+            raise
 
     @mcp.tool(
         name="sarvam_tools_pronunciation_delete",
@@ -113,15 +125,19 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         dictionary_id: str = Field(description="The pronunciation dictionary ID to delete."),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        with measure_tool() as metrics:
-            payload, call = await sc.client.delete_json(
-                PRONDICT_BASE, params={"dict_id": dictionary_id}
-            )
-            metrics.merge(call)
-        return {
-            "dictionary_id": dictionary_id,
-            "deleted": True,
-            "raw": payload,
-            "observability": metrics.to_response_block(),
-        }
+        try:
+            sc = await ready_ctx(ctx)
+            with measure_tool() as metrics:
+                payload, call = await sc.client.delete_json(
+                    PRONDICT_BASE, params={"dict_id": dictionary_id}
+                )
+                metrics.merge(call)
+            return {
+                "dictionary_id": dictionary_id,
+                "deleted": True,
+                "raw": payload,
+                "observability": metrics.to_response_block(),
+            }
+        except Exception as exc:
+            log_tool_error("sarvam_tools_pronunciation_delete", exc)
+            raise
