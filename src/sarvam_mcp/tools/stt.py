@@ -10,7 +10,9 @@ import httpx
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
-from sarvam_mcp.observability import measure_tool
+from sarvam_mcp._registry import ServerContext
+from sarvam_mcp.http.errors import SarvamBadRequestError
+from sarvam_mcp.observability import ToolMetrics, measure_tool
 from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
 
 STT_PATH = "/speech-to-text"
@@ -22,6 +24,12 @@ STT_JOB_DOWNLOAD = f"{STT_JOB_BASE}/download-files"
 MAX_POLL_ATTEMPTS = 90
 POLL_INTERVAL_SECONDS = 2
 
+# /download-files can reject a job as not-yet-Completed for a few seconds
+# right after /status already reports it terminal — a backend consistency
+# lag between the two endpoints, observed most on fast-completing jobs.
+DOWNLOAD_READY_ATTEMPTS = 3
+DOWNLOAD_READY_RETRY_DELAY_SECONDS = 3
+
 SttModel = Literal["saaras:v3"]
 
 SttMode = Literal["transcribe", "translate", "verbatim", "translit", "codemix"]
@@ -30,6 +38,187 @@ InputAudioCodec = Literal["pcm_s16le", "pcm_l16", "pcm_raw"]
 
 # Legacy model types kept for the deprecated translate tool.
 SaarasModel = Literal["saaras:v3", "saaras:v3-realtime", "saaras:v2.5"]
+
+
+async def stt_batch_transcribe(
+    sc: ServerContext,
+    ctx: Context,
+    audio_path: Path,
+    *,
+    language_code: str = "unknown",
+    mode: str = "transcribe",
+    with_timestamps: bool = False,
+    with_diarization: bool = False,
+    num_speakers: int | None = None,
+    model: str = "saaras:v3",
+    metrics: ToolMetrics | None = None,
+) -> dict[str, Any]:
+    """Run the full batch STT flow: create job → upload → start → poll → extract.
+
+    Chains the five manual steps (create, register upload, PUT to blob, start,
+    poll-until-terminal) that ``sarvam_tools_stt_batch_submit`` exposes as one
+    tool call. Shared here so other composite workflows (e.g. ``sv_meet``) can
+    reuse batch/diarized transcription without re-implementing the polling loop.
+
+    Returns a dict shaped like the tool response, minus ``observability`` —
+    callers merge that in from their own ``metrics`` after their
+    ``measure_tool()`` block exits. On a poll timeout the dict has only
+    ``job_id`` / ``job_state`` / ``error`` — no transcript fields.
+    """
+    if metrics is None:
+        metrics = ToolMetrics(latency_ms=0.0)
+
+    # Step 1: Create the job
+    await ctx.info("Creating batch STT job…")
+    job_params: dict[str, Any] = {
+        "language_code": language_code if language_code != "unknown" else None,
+        "model": model,
+        "mode": mode,
+        "with_timestamps": with_timestamps,
+        "with_diarization": with_diarization,
+    }
+    if num_speakers is not None:
+        job_params["num_speakers"] = num_speakers
+    job_params = {k: v for k, v in job_params.items() if v is not None}
+
+    create_resp, call = await sc.client.post_json(STT_JOB_BASE, json_body={"job_parameters": job_params})
+    metrics.merge(call)
+    job_id = create_resp["job_id"]
+
+    # Step 2: Register files → get upload SAS URLs
+    await ctx.info(f"Registering audio file for job {job_id}…")
+    upload_resp, call = await sc.client.post_json(
+        STT_JOB_UPLOAD,
+        json_body={"job_id": job_id, "files": [audio_path.name]},
+    )
+    metrics.merge(call)
+
+    upload_urls = upload_resp.get("upload_urls", {})
+    if not upload_urls:
+        raise RuntimeError(f"No upload URLs returned for job {job_id}")
+
+    # Step 3: PUT audio bytes to Azure Blob
+    await ctx.info("Uploading audio to Azure Blob…")
+    file_details = next(iter(upload_urls.values()))
+    presigned_url = file_details["file_url"]
+    file_metadata = file_details.get("file_metadata") or {}
+
+    extra_headers = {str(k): str(v) for k, v in file_metadata.items()}
+    with audio_path.open("rb") as fh:
+        blob_metrics = await sc.client.put_blob(
+            presigned_url,
+            fh.read(),
+            content_type=_guess_audio_mime(audio_path),
+            extra_headers=extra_headers,
+        )
+    metrics.merge(blob_metrics)
+
+    # Step 4: Start the job
+    await ctx.info("Starting batch processing…")
+    start_resp, call = await sc.client.post_json(
+        f"{STT_JOB_BASE}/{job_id}/start",
+        json_body={"job_id": job_id, "job_parameters": job_params},
+    )
+    metrics.merge(call)
+
+    # Step 5: Poll for completion
+    await ctx.info("Polling for completion…")
+    terminal_states = {"Completed", "PartiallyCompleted", "Failed", "failed", "error"}
+    status_resp: dict[str, Any] = {}
+    for attempt in range(MAX_POLL_ATTEMPTS):
+        status_resp, call = await sc.client.get_json(f"{STT_JOB_BASE}/{job_id}/status")
+        metrics.merge(call)
+        job_state = status_resp.get("job_state", "")
+        if job_state in terminal_states:
+            break
+        if (attempt + 1) % 5 == 0:
+            await ctx.report_progress(attempt + 1, MAX_POLL_ATTEMPTS)
+        await asyncio.sleep(POLL_INTERVAL_SECONDS)
+    else:
+        return {
+            "job_id": job_id,
+            "job_state": status_resp.get("job_state", "timeout"),
+            "error": (
+                f"Job did not complete within "
+                f"{MAX_POLL_ATTEMPTS * POLL_INTERVAL_SECONDS}s. "
+                f"Poll manually with sarvam_tools_stt_batch_status."
+            ),
+        }
+
+    # Step 6: Extract transcript
+    result = status_resp.get("result") or {}
+    transcript = result.get("transcript") or status_resp.get("transcript")
+
+    if not transcript:
+        # The status response never inlines the result for a job whose output
+        # wasn't returned directly — the documented flow is to fetch the SAS
+        # URL for each output file via /download-files, then GET it.
+        file_names = [
+            output["file_name"]
+            for detail in status_resp.get("job_details") or []
+            for output in detail.get("outputs") or []
+            if output.get("file_name")
+        ]
+        if file_names:
+            await ctx.info("Fetching output file list…")
+            download_urls = await _fetch_download_urls(sc, job_id, file_names, metrics)
+
+            await ctx.info("Downloading transcript…")
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as dl:
+                for file_details in download_urls.values():
+                    dl_url = file_details.get("file_url")
+                    if not dl_url:
+                        continue
+                    dl_resp = await dl.get(dl_url)
+                    if not dl_resp.is_success:
+                        continue
+                    dl_body = dl_resp.json()
+                    if dl_body.get("transcript"):
+                        transcript = dl_body["transcript"]
+                        result = dl_body
+                        break
+
+    return {
+        "job_id": job_id,
+        "job_state": status_resp.get("job_state"),
+        "transcript": transcript or "",
+        "language_code": result.get("language_code"),
+        "diarized_transcript": result.get("diarized_transcript"),
+        "timestamps": result.get("timestamps"),
+    }
+
+
+async def _fetch_download_urls(
+    sc: ServerContext,
+    job_id: str,
+    file_names: list[str],
+    metrics: ToolMetrics,
+) -> dict[str, Any]:
+    """POST /download-files, retrying briefly on a transient consistency lag.
+
+    Observed live: /download-files can reject a job as not-yet-Completed for
+    a few seconds right after /status already reports it terminal, most often
+    on fast-completing jobs. Retries only on that specific rejection — any
+    other SarvamBadRequestError (a real caller-side problem) is not retried.
+    """
+    for attempt in range(DOWNLOAD_READY_ATTEMPTS):
+        try:
+            dl_list_resp, call = await sc.client.post_json(
+                STT_JOB_DOWNLOAD,
+                json_body={"job_id": job_id, "files": file_names},
+            )
+        except SarvamBadRequestError as exc:
+            if "COMPLETED state" not in str(exc) or attempt == DOWNLOAD_READY_ATTEMPTS - 1:
+                raise RuntimeError(
+                    f"Job {job_id} polled as terminal, but /download-files still "
+                    f"rejects it after {attempt + 1} attempt(s): {exc}"
+                ) from exc
+            await asyncio.sleep(DOWNLOAD_READY_RETRY_DELAY_SECONDS * (attempt + 1))
+            continue
+        metrics.merge(call)
+        return dl_list_resp.get("download_urls") or {}
+
+    raise AssertionError("unreachable")  # loop always returns or raises
 
 
 def register(mcp: FastMCP) -> None:
@@ -236,113 +425,20 @@ def register(mcp: FastMCP) -> None:
             file_url=audio_url, filename=filename,
         ) as path:
             with measure_tool() as metrics:
-                # Step 1: Create the job
-                await ctx.info("Creating batch STT job…")
-                job_params: dict[str, Any] = {
-                    "language_code": language_code if language_code != "unknown" else None,
-                    "model": model,
-                    "mode": mode,
-                    "with_timestamps": with_timestamps,
-                    "with_diarization": with_diarization,
-                }
-                if num_speakers is not None:
-                    job_params["num_speakers"] = num_speakers
-                job_params = {k: v for k, v in job_params.items() if v is not None}
-
-                create_resp, call = await sc.client.post_json(
-                    STT_JOB_BASE, json_body={"job_parameters": job_params}
+                result = await stt_batch_transcribe(
+                    sc,
+                    ctx,
+                    path,
+                    language_code=language_code,
+                    mode=mode,
+                    with_timestamps=with_timestamps,
+                    with_diarization=with_diarization,
+                    num_speakers=num_speakers,
+                    model=model,
+                    metrics=metrics,
                 )
-                metrics.merge(call)
-                job_id = create_resp["job_id"]
 
-                # Step 2: Register files → get upload SAS URLs
-                await ctx.info(f"Registering audio file for job {job_id}…")
-                upload_resp, call = await sc.client.post_json(
-                    STT_JOB_UPLOAD,
-                    json_body={"job_id": job_id, "files": [path.name]},
-                )
-                metrics.merge(call)
-
-                upload_urls = upload_resp.get("upload_urls", {})
-                if not upload_urls:
-                    raise RuntimeError(f"No upload URLs returned for job {job_id}")
-
-                # Step 3: PUT audio bytes to Azure Blob
-                await ctx.info("Uploading audio to Azure Blob…")
-                file_details = next(iter(upload_urls.values()))
-                presigned_url = file_details["file_url"]
-                file_metadata = file_details.get("file_metadata") or {}
-
-                extra_headers = {str(k): str(v) for k, v in file_metadata.items()}
-                with path.open("rb") as fh:
-                    blob_metrics = await sc.client.put_blob(
-                        presigned_url,
-                        fh.read(),
-                        content_type=_guess_audio_mime(path),
-                        extra_headers=extra_headers,
-                    )
-                metrics.merge(blob_metrics)
-
-                # Step 4: Start the job
-                await ctx.info("Starting batch processing…")
-                start_resp, call = await sc.client.post_json(
-                    f"{STT_JOB_BASE}/{job_id}/start",
-                    json_body={"job_id": job_id, "job_parameters": job_params},
-                )
-                metrics.merge(call)
-
-                # Step 5: Poll for completion
-                await ctx.info("Polling for completion…")
-                terminal_states = {"Completed", "PartiallyCompleted", "Failed", "failed", "error"}
-                status_resp: dict[str, Any] = {}
-                for attempt in range(MAX_POLL_ATTEMPTS):
-                    status_resp, call = await sc.client.get_json(
-                        f"{STT_JOB_BASE}/{job_id}/status"
-                    )
-                    metrics.merge(call)
-                    job_state = status_resp.get("job_state", "")
-                    if job_state in terminal_states:
-                        break
-                    if (attempt + 1) % 5 == 0:
-                        await ctx.report_progress(attempt + 1, MAX_POLL_ATTEMPTS)
-                    await asyncio.sleep(POLL_INTERVAL_SECONDS)
-                else:
-                    return {
-                        "job_id": job_id,
-                        "job_state": status_resp.get("job_state", "timeout"),
-                        "error": (
-                            f"Job did not complete within "
-                            f"{MAX_POLL_ATTEMPTS * POLL_INTERVAL_SECONDS}s. "
-                            f"Poll manually with sarvam_tools_stt_batch_status."
-                        ),
-                        "observability": metrics.to_response_block(),
-                    }
-
-                # Step 6: Extract transcript
-                result = status_resp.get("result") or {}
-                transcript = result.get("transcript") or status_resp.get("transcript")
-
-                if not transcript:
-                    download_urls = status_resp.get("download_urls", {})
-                    if download_urls:
-                        await ctx.info("Downloading transcript…")
-                        dl_url = next(iter(download_urls.values()))["file_url"]
-                        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as dl:
-                            dl_resp = await dl.get(dl_url)
-                        if dl_resp.is_success:
-                            dl_body = dl_resp.json()
-                            transcript = dl_body.get("transcript", "")
-                            result = dl_body
-
-        return {
-            "job_id": job_id,
-            "job_state": status_resp.get("job_state"),
-            "transcript": transcript or "",
-            "language_code": result.get("language_code"),
-            "diarized_transcript": result.get("diarized_transcript"),
-            "timestamps": result.get("timestamps"),
-            "observability": metrics.to_response_block(),
-        }
+        return {**result, "observability": metrics.to_response_block()}
 
     @mcp.tool(
         name="sarvam_tools_stt_batch_status",
