@@ -103,7 +103,7 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_tts_stream",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Streaming variant of sarvam_tts_speak using the TTS WebSocket. "
+            "Streaming variant of sarvam_tools_tts_speak using the TTS WebSocket. "
             "Audio is streamed to disk in the background; the tool returns a "
             "sarvam:// resource URI immediately."
         ),
