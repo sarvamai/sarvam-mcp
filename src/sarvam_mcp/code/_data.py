@@ -296,7 +296,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "dictionary_count": "int",
             "dictionaries":     "list[str] — dictionary IDs",
         },
-        "notes": "CRUD for pronunciation dictionaries. Also supports GET /{id}, PUT /{id}, DELETE /{id}.",
+        "notes": "CRUD for pronunciation dictionaries. GET /{id} takes the id as a path param; PUT and DELETE take it as a query param (?dict_id={id}).",
     },
 }
 

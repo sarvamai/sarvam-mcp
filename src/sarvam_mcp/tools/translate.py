@@ -39,7 +39,12 @@ def register(mcp: FastMCP) -> None:
     )
     async def sarvam_translate(
         ctx: Context,
-        input: str = Field(description="Text to translate (max ~2000 chars)."),
+        input: str = Field(
+            description=(
+                "Text to translate. Max ~1000 chars for `mayura:v1` (the default); "
+                "~2000 for `sarvam-translate:v1`."
+            ),
+        ),
         source_language_code: LanguageCode = Field(
             description="Source BCP-47 code, or 'auto' to auto-detect.",
         ),
