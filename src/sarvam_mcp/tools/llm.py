@@ -13,6 +13,7 @@ from sarvam_mcp.tools._common import SarvamLLM, ready_ctx
 CHAT_PATH = "/v1/chat/completions"
 
 ChatRole = Literal["system", "user", "assistant"]
+ReasoningEffort = Literal["low", "medium", "high"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -41,6 +42,18 @@ def register(mcp: FastMCP) -> None:
         temperature: float = Field(default=0.7, ge=0.0, le=2.0),
         top_p: float = Field(default=1.0, ge=0.0, le=1.0),
         max_tokens: int | None = Field(default=None, ge=1),
+        reasoning_effort: ReasoningEffort | None = Field(
+            default=None,
+            description=(
+                "sarvam-105b reasons by default even if you don't ask for it, consuming "
+                "a variable, often large chunk of max_tokens on hidden reasoning before "
+                "any visible content is produced. 'low' reduces that overhead but does "
+                "NOT eliminate it — a small max_tokens (e.g. 20-100) can still come back "
+                "empty. If you set max_tokens, give it real headroom (300+); omitting "
+                "max_tokens entirely is the safest way to always get visible content. "
+                "Omit this field to use the API's own default effort."
+            ),
+        ),
         stream: bool = Field(
             default=False,
             description="Streaming via MCP isn't useful for chat — keep False unless testing.",
@@ -56,6 +69,8 @@ def register(mcp: FastMCP) -> None:
         }
         if max_tokens is not None:
             body["max_tokens"] = max_tokens
+        if reasoning_effort is not None:
+            body["reasoning_effort"] = reasoning_effort
 
         with measure_tool() as metrics:
             payload, call = await sc.client.post_json(CHAT_PATH, json_body=body)
@@ -75,8 +90,16 @@ def register(mcp: FastMCP) -> None:
             "observability": metrics.to_response_block(),
         }
         if finish_reason == "length":
-            result["truncation_warning"] = (
-                "Output was truncated because max_tokens was reached. "
-                "Increase max_tokens or omit it for the full response."
-            )
+            if not content:
+                result["truncation_warning"] = (
+                    "max_tokens was reached before any visible content was produced — "
+                    "consumed entirely by sarvam-105b's reasoning. Raise max_tokens "
+                    "substantially (300+) and/or pass reasoning_effort='low'; omitting "
+                    "max_tokens entirely is the most reliable fix."
+                )
+            else:
+                result["truncation_warning"] = (
+                    "Output was truncated because max_tokens was reached. "
+                    "Increase max_tokens or omit it for the full response."
+                )
         return result
