@@ -123,16 +123,20 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "speaker":              "str, required — must be compatible with chosen model",
             "model":                "str — bulbul:v3 default",
             "speech_sample_rate":   "int — 8000|16000|22050|24000|32000|44100|48000",
-            "pitch":                "float, -1.0 to 1.0 (default 0)",
             "pace":                 "float, 0.3 to 3.0 (default 1)",
-            "loudness":             "float, 0.1 to 3.0 (default 1)",
             "enable_preprocessing": "bool — normalize numbers/dates/code-mix",
         },
         "response": {
             "audios":     "list[str] — base64-encoded WAV per input",
             "request_id": "str",
         },
-        "notes": "Pick a speaker compatible with your model — see sarvam_code_speakers.",
+        "notes": (
+            "Pick a speaker compatible with your model — see sarvam_code_speakers. "
+            "Do NOT send `pitch` or `loudness` — bulbul:v3 rejects the request "
+            "outright if either is present, even at a 'neutral' value "
+            "(live-confirmed 2026-08-14: \"Pitch and loudness parameters are "
+            "currently not supported for the Bulbul V3 model\")."
+        ),
     },
     "/speech-to-text": {
         "method": "POST",
@@ -205,13 +209,18 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "output_script":        "str — roman | fully-native | spoken-form-in-native (Mayura only)",
             "numerals_format":      "str — international | native",
             "speaker_gender":       "str — Male | Female (gendered languages)",
-            "enable_preprocessing": "bool",
         },
         "response": {
             "translated_text":      "str",
             "source_language_code": "str",
             "request_id":           "str",
         },
+        "notes": (
+            "max input length: 1000 chars for mayura:v1, 2000 chars for "
+            "sarvam-translate:v1 (live-confirmed 2026-08-14). "
+            "`enable_preprocessing` was removed from this endpoint's schema "
+            "and is no longer a valid parameter — don't send it."
+        ),
     },
     "/transliterate": {
         "method": "POST",
@@ -251,18 +260,33 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
     },
     "/v1/chat/completions": {
         "method": "POST",
-        "model": "sarvam-105b (flagship, sole current model)",
+        "model": "sarvam-105b (flagship)",
         "content_type": "application/json",
         "request_body": {
-            "model":       "str — sarvam-105b",
-            "messages":    "list[{role, content}]",
-            "temperature": "float, 0.0 to 2.0",
-            "top_p":       "float, 0.0 to 1.0",
-            "max_tokens":  "int (optional)",
-            "stream":      "bool",
+            "model":            "str — sarvam-105b",
+            "messages":         "list[{role, content}]",
+            "temperature":      "float, 0.0 to 2.0",
+            "top_p":            "float, 0.0 to 1.0",
+            "max_tokens":       "int (optional)",
+            "reasoning_effort": "str (optional) — 'low' | 'medium' | 'high'",
+            "stream":           "bool",
         },
         "response_oai_compatible": True,
-        "notes": "OpenAI-compatible. sarvam-30b was deprecated by Sarvam; sarvam-105b is the sole current model.",
+        "notes": (
+            "OpenAI-compatible. sarvam-30b and sarvam-m were deprecated by "
+            "Sarvam; sarvam-105b is the flagship model on this v1 endpoint. "
+            "GOTCHA (live-confirmed 2026-08-14): sarvam-105b reasons by "
+            "default even without reasoning_effort set, and reasoning tokens "
+            "count against max_tokens. A small max_tokens (e.g. 20-100) can "
+            "come back with finish_reason='length' and EMPTY content — the "
+            "whole budget was consumed by hidden reasoning. Give it real "
+            "headroom (300+) or omit max_tokens; reasoning_effort='low' "
+            "reduces but does not eliminate this. "
+            "There is also a /v2/chat/completions endpoint that additionally "
+            "serves sarvam-105b-conversations and other (beta, fast-changing) "
+            "open-weight models — not covered here; check docs.sarvam.ai for "
+            "the current v2 model list before relying on a specific one."
+        ),
     },
     "/doc-digitization/job/v1": {
         "method": "POST",
@@ -283,11 +307,17 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "(/doc-digitization/job/v1/upload-files) → PUT file to presigned URL → "
             "start (/doc-digitization/job/v1/{job_id}/start) → "
             "poll status (/doc-digitization/job/v1/{job_id}/status). "
-            "Max 10 pages per document. Output delivered as ZIP."
+            "Max 10 pages per document. Output delivered as ZIP. "
+            "This endpoint still works (live-confirmed 2026-08-14), but Sarvam's "
+            "current docs describe a newer 'Doc AI' product at /doc-ai/v1/job/ "
+            "with separate digitise() (full-document OCR, same as this) and "
+            "extract() (schema-based field extraction — pull specific fields "
+            "instead of the whole document) operations, plus CSV/XLSX output. "
+            "Worth checking docs.sarvam.ai/docai for the current recommended path."
         ),
     },
     "/text-to-speech/pronunciation-dictionary": {
-        "method": "GET (list), POST (create)",
+        "method": "GET (list), POST (create), GET /{id} (get), DELETE ?dict_id= (delete)",
         "content_type": "application/json",
         "request_body": {
             "entries": "dict[str, str] — word → pronunciation mappings (for create)",
@@ -296,7 +326,36 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "dictionary_count": "int",
             "dictionaries":     "list[str] — dictionary IDs",
         },
-        "notes": "CRUD for pronunciation dictionaries. Also supports GET /{id}, PUT /{id}, DELETE /{id}.",
+        "notes": (
+            "CRUD for pronunciation dictionaries (all live-confirmed 2026-08-14). "
+            "GET a specific dictionary via a path segment (.../{dictionary_id}); "
+            "DELETE instead takes the id as a query param "
+            "(.../pronunciation-dictionary?dict_id={id}), not a path segment — "
+            "easy to get backwards."
+        ),
+    },
+    "/text-to-speech/ws": {
+        "method": "WebSocket",
+        "model": "bulbul:v3",
+        "notes": (
+            "Live-confirmed 2026-08-14. Connect to "
+            "wss://api.sarvam.ai/text-to-speech/ws?model=bulbul:v3 with header "
+            "api-subscription-key: <key>. model is a URL query param, not a "
+            "body/config field. Message sequence: send "
+            '{"type":"config","data":{"speaker","language_code","pace",'
+            '"output_audio_codec","output_audio_bitrate","min_buffer_size",'
+            '"max_chunk_length"}} first, then one or more '
+            '{"type":"text","data":{"text":...}}, then {"type":"flush"} to force '
+            "processing. Audio arrives as TEXT (JSON) frames, not binary: "
+            '{"type":"audio","data":{"content_type":...,"audio":"<base64>"}}. '
+            "There is no reliable end-of-stream event in practice — treat a "
+            "short idle period with no new frames as completion. Only the "
+            "first audio chunk carries a WAV header; concatenating chunks "
+            "in order produces a valid file, but the header's RIFF/data size "
+            "fields are streaming placeholders (0xFFFFFFFF) that must be "
+            "patched with the true length once the stream ends, or strict WAV "
+            "parsers will misread the duration."
+        ),
     },
 }
 
@@ -314,7 +373,7 @@ PRICING: dict[str, dict[str, Any]] = {
     "bulbul:v3":            {"unit": "per character",         "tier": "billed by character"},
     "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
     "sarvam-translate:v1":  {"unit": "per character",         "tier": "billed by character"},
-    "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship)"},
+    "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},
     "sarvam-vision":        {"unit": "per page",              "tier": "billed by page"},
 }
 

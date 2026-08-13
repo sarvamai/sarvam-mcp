@@ -328,6 +328,13 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
             8000, 16000, 22050, 24000, 32000, 44100, 48000
         ):
             issues.append(_err("speech_sample_rate", "Invalid sample rate."))
+        for f in ("pitch", "loudness"):
+            if f in body:
+                issues.append(_err(
+                    f, f"bulbul:v3 rejects the request outright if `{f}` is present "
+                    "at all, even at a neutral/default value.",
+                    f"Remove `{f}` from the body entirely.",
+                ))
 
     elif endpoint == "/speech-to-text":
         if not body.get("file") and "file" not in body:
@@ -365,6 +372,22 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
         if model == "sarvam-translate:v1" and body.get("mode"):
             issues.append(_warn("mode", "Sarvam-Translate v1 ignores `mode` — formal only.",
                                 "Drop the field or switch to mayura:v1 if you need modes."))
+        if "enable_preprocessing" in body:
+            issues.append(_warn(
+                "enable_preprocessing",
+                "This parameter was removed from /translate's schema and is "
+                "silently ignored by the API — it no longer controls anything.",
+                "Drop the field.",
+            ))
+        input_text = body.get("input")
+        if isinstance(input_text, str):
+            limit = 1000 if model == "mayura:v1" else 2000
+            if len(input_text) > limit:
+                issues.append(_err(
+                    "input", f"{len(input_text)} chars exceeds the {limit}-char "
+                    f"limit for {model}.",
+                    "Shorten the input, or switch model if you need the higher limit.",
+                ))
 
     elif endpoint == "/v1/chat/completions":
         if not body.get("messages"):
@@ -376,6 +399,21 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
         t = body.get("temperature")
         if t is not None and not (0.0 <= t <= 2.0):
             issues.append(_err("temperature", "Must be between 0.0 and 2.0."))
+        max_tokens = body.get("max_tokens")
+        if (
+            isinstance(max_tokens, int)
+            and max_tokens < 200
+            and not body.get("reasoning_effort")
+        ):
+            issues.append(_warn(
+                "max_tokens",
+                f"sarvam-105b reasons by default and reasoning tokens count "
+                f"against max_tokens — {max_tokens} can easily be consumed "
+                "entirely by hidden reasoning, returning empty content with "
+                "finish_reason='length'.",
+                "Raise max_tokens (300+), omit it entirely, or set "
+                "reasoning_effort='low' (reduces but doesn't eliminate this).",
+            ))
 
     elif endpoint == "/text-analytics":
         if not body.get("text"):

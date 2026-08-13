@@ -36,6 +36,7 @@ EndpointPath = Literal[
     "/v1/chat/completions",
     "/doc-digitization/job/v1",
     "/text-to-speech/pronunciation-dictionary",
+    "/text-to-speech/ws",
 ]
 TtsModel = Literal["bulbul:v3"]
 
