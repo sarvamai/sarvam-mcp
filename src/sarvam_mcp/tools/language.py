@@ -31,7 +31,7 @@ def register(mcp: FastMCP) -> None:
     )
     async def sarvam_identify_language(
         ctx: Context,
-        input: str = Field(description="Text whose language to identify."),
+        input: str = Field(description="Text whose language to identify. Max 1000 characters."),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         with measure_tool() as metrics:
@@ -47,6 +47,12 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_text_analytics",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
+            "KNOWN ISSUE (as of 2026-08-13): the upstream `/text-analytics` endpoint "
+            "is currently returning 404 Not Found for all requests — confirmed via a "
+            "direct API call outside this tool, so this is not a bug in sarvam-mcp's "
+            "request shape. The endpoint's own docs page is also 404. If this tool "
+            "fails, that's very likely why — don't retry, and check dashboard.sarvam.ai "
+            "or Sarvam support for current availability before relying on it.\n\n"
             "Run deep analysis on a piece of text by passing a list of typed "
             "questions. Each question needs `id`, `text`, and `type` "
             "(`boolean` | `enum` | `short answer` | `long answer` | `number`). "
