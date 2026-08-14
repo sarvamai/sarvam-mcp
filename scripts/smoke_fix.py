@@ -118,7 +118,7 @@ async def main():
             client.post_json(
                 "/speech-to-text/job/init",
                 json_body={
-                    "model": "saaras:v3",
+                    "model": "saaras:v4",
                     "with_timestamps": False,
                 },
             ),
@@ -135,7 +135,7 @@ async def main():
                 "/speech-to-text-batch  (multipart)",
                 client.post_multipart(
                     "/speech-to-text-batch",
-                    data={"model": "saaras:v3"},
+                    data={"model": "saaras:v4"},
                     files={"file": ("clip.wav", wav_bytes, "audio/wav")},
                 ),
             )

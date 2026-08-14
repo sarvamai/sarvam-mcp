@@ -80,14 +80,14 @@ curl -sS https://api.sarvam.ai/text-to-speech \\
 '''
 
 PY_STT = '''\
-"""Transcribe Indic audio via Saaras v3."""
+"""Transcribe Indic audio via Saaras v4."""
 import os, httpx
 
 API_KEY = os.environ["SARVAM_API_KEY"]
 
 with open("input.wav", "rb") as fh:
     files = {"file": ("input.wav", fh, "audio/wav")}
-    data  = {"model": "saaras:v3", "language_code": "hi-IN", "with_timestamps": "false"}
+    data  = {"model": "saaras:v4", "language_code": "hi-IN", "with_timestamps": "false"}
     resp = httpx.post(
         "https://api.sarvam.ai/speech-to-text",
         headers={"api-subscription-key": API_KEY},
@@ -100,7 +100,7 @@ print(resp.json()["transcript"])
 '''
 
 JS_STT = '''\
-// Transcribe Indic audio via Saaras v3.
+// Transcribe Indic audio via Saaras v4.
 import { readFileSync } from "node:fs";
 
 const API_KEY = process.env.SARVAM_API_KEY;
@@ -108,7 +108,7 @@ const wav = readFileSync("input.wav");
 
 const form = new FormData();
 form.set("file", new Blob([wav], { type: "audio/wav" }), "input.wav");
-form.set("model", "saaras:v3");
+form.set("model", "saaras:v4");
 form.set("language_code", "hi-IN");
 form.set("with_timestamps", "false");
 
@@ -126,7 +126,7 @@ CURL_STT = '''\
 curl -sS https://api.sarvam.ai/speech-to-text \\
   -H "api-subscription-key: $SARVAM_API_KEY" \\
   -F "file=@input.wav;type=audio/wav" \\
-  -F "model=saaras:v3" \\
+  -F "model=saaras:v4" \\
   -F "language_code=hi-IN" \\
   -F "with_timestamps=false" \\
   | jq .transcript

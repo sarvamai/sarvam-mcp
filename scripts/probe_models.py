@@ -52,7 +52,7 @@ async def main():
     print("\n=== STT transcribe — saaras ===")
     if WAV.exists():
         wav = WAV.read_bytes()
-        for v in ["saaras:v3"]:
+        for v in ["saaras:v4", "saaras:v3"]:
             await probe(
                 v,
                 c.post_multipart(
