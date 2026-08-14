@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import time
 import uuid
@@ -14,7 +15,16 @@ from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import BulbulSpeaker, TtsLanguageCode, ready_ctx
 
 TTS_PATH = "/text-to-speech"
-TTS_STREAM_PATH = "/text-to-speech/stream"  # documented WebSocket path
+TTS_STREAM_PATH = "/text-to-speech/ws"  # current WebSocket path — live-confirmed 2026-08-14.
+# The old "/text-to-speech/stream" path used to live here now returns HTTP 403
+# at the WebSocket handshake, before a single message is sent.
+
+# Idle time with no new frame from the server before we consider the stream
+# finished — the WS protocol has no reliable "done" event (send_completion_event
+# didn't produce one in live testing either), so this is a timeout heuristic,
+# same as the one described in Sarvam's own docs.
+WS_IDLE_TIMEOUT_SECONDS = 8.0
+WS_MAX_STREAM_SECONDS = 60.0
 
 SampleRate = Literal[8000, 16000, 22050, 24000, 32000, 44100, 48000]
 TtsModel = Literal["bulbul:v3"]
@@ -48,9 +58,7 @@ def register(mcp: FastMCP) -> None:
         speech_sample_rate: SampleRate = Field(
             default=24000, description="PCM sample rate of the output WAV."
         ),
-        pitch: float = Field(default=0.0, ge=-1.0, le=1.0),
         pace: float = Field(default=1.0, ge=0.3, le=3.0),
-        loudness: float = Field(default=1.0, ge=0.1, le=3.0),
         enable_preprocessing: bool = Field(
             default=True,
             description="Normalize numbers/dates/code-mixed segments before synthesis.",
@@ -61,14 +69,15 @@ def register(mcp: FastMCP) -> None:
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
+        # bulbul:v3 rejects requests that include pitch/loudness at all
+        # ("Pitch and loudness parameters are currently not supported for
+        # the Bulbul V3 model") — live-confirmed 2026-08-13. Don't send them.
         body: dict[str, Any] = {
             "inputs": [text],
             "target_language_code": target_language_code,
             "speaker": speaker,
             "speech_sample_rate": speech_sample_rate,
-            "pitch": pitch,
             "pace": pace,
-            "loudness": loudness,
             "enable_preprocessing": enable_preprocessing,
             "model": model,
         }
@@ -104,8 +113,12 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
             "Streaming variant of sarvam_tts_speak using the TTS WebSocket. "
-            "Audio is streamed to disk in the background; the tool returns a "
-            "sarvam:// resource URI immediately."
+            "Opens a connection, sends the text once, and collects the streamed "
+            "audio chunks into a single WAV file (there's no reliable server-side "
+            "'done' signal, so completion is detected via a short idle timeout — "
+            "expect a few extra seconds of latency vs. sarvam_tts_speak for that "
+            "reason). Falls back to the REST endpoint if the WebSocket is "
+            "unavailable."
         ),
     )
     async def sarvam_tts_stream(
@@ -113,34 +126,45 @@ def register(mcp: FastMCP) -> None:
         text: str = Field(description="Text to synthesize."),
         target_language_code: TtsLanguageCode = Field(),
         speaker: BulbulSpeaker = Field(default="priya"),
-        speech_sample_rate: SampleRate = Field(default=24000),
+        pace: float = Field(default=1.0, ge=0.3, le=3.0),
         model: TtsModel = Field(default="bulbul:v3"),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
-        ws_url = sc.config.base_url.replace("http", "ws", 1) + TTS_STREAM_PATH
+        ws_url = f"{sc.config.base_url.replace('http', 'ws', 1)}{TTS_STREAM_PATH}?model={model}"
 
         chunks: list[bytes] = []
         with measure_tool() as metrics:
             try:
                 async with sc.client.stream_ws(ws_url) as ws:
                     await ws.send(
-                        _ws_request_payload(
-                            text=text,
-                            target_language_code=target_language_code,
-                            speaker=speaker,
-                            speech_sample_rate=speech_sample_rate,
-                            model=model,
+                        _ws_config_payload(
+                            speaker=speaker, language_code=target_language_code, pace=pace
                         )
                     )
-                    async for frame in ws:
+                    await ws.send(_ws_text_payload(text))
+                    await ws.send(_ws_flush_payload())
+
+                    loop = asyncio.get_event_loop()
+                    deadline = loop.time() + WS_MAX_STREAM_SECONDS
+                    while loop.time() < deadline:
+                        try:
+                            frame = await asyncio.wait_for(
+                                ws.recv(), timeout=WS_IDLE_TIMEOUT_SECONDS
+                            )
+                        except TimeoutError:
+                            break  # no new audio for a while — treat as done
                         if isinstance(frame, bytes):
                             chunks.append(frame)
-                        else:
-                            event = _maybe_parse_event(frame)
-                            if event.get("type") == "end":
+                            continue
+                        event = _maybe_parse_event(frame)
+                        event_type = event.get("type")
+                        if event_type == "audio":
+                            audio_b64 = (event.get("data") or {}).get("audio")
+                            if audio_b64:
+                                chunks.append(base64.b64decode(audio_b64))
+                        elif event_type == "event":
+                            if (event.get("data") or {}).get("event_type") == "final":
                                 break
-                            if event.get("audio"):
-                                chunks.append(base64.b64decode(event["audio"]))
             except Exception as exc:  # noqa: BLE001
                 # Fall back to REST if streaming endpoint is unavailable.
                 await ctx.warning(
@@ -152,7 +176,8 @@ def register(mcp: FastMCP) -> None:
                         "inputs": [text],
                         "target_language_code": target_language_code,
                         "speaker": speaker,
-                        "speech_sample_rate": speech_sample_rate,
+                        "speech_sample_rate": 24000,
+                        "pace": pace,
                         "model": model,
                     },
                 )
@@ -164,6 +189,7 @@ def register(mcp: FastMCP) -> None:
         wav_bytes = b"".join(chunks)
         if not wav_bytes:
             raise RuntimeError("TTS stream produced no audio.")
+        wav_bytes = _finalize_wav_header(wav_bytes)
 
         filename = f"sarvam-tts-stream-{uuid.uuid4().hex[:8]}.wav"
         stored = await sc.audio_sink.store(
@@ -179,26 +205,57 @@ def register(mcp: FastMCP) -> None:
         }
 
 
-def _ws_request_payload(
-    *,
-    text: str,
-    target_language_code: str,
-    speaker: str,
-    speech_sample_rate: int,
-    model: str,
-) -> str:
+def _ws_config_payload(*, speaker: str, language_code: str, pace: float) -> str:
     import json as _json
 
     return _json.dumps(
         {
-            "type": "synthesize",
-            "text": text,
-            "target_language_code": target_language_code,
-            "speaker": speaker,
-            "speech_sample_rate": speech_sample_rate,
-            "model": model,
+            "type": "config",
+            "data": {
+                "speaker": speaker,
+                "language_code": language_code,
+                "pace": pace,
+                "output_audio_codec": "wav",
+            },
         }
     )
+
+
+def _ws_text_payload(text: str) -> str:
+    import json as _json
+
+    return _json.dumps({"type": "text", "data": {"text": text}})
+
+
+def _ws_flush_payload() -> str:
+    import json as _json
+
+    return _json.dumps({"type": "flush"})
+
+
+def _finalize_wav_header(wav_bytes: bytes) -> bytes:
+    """Patch the RIFF/data chunk sizes once the full stream is collected.
+
+    Sarvam's TTS WebSocket streams a WAV whose header doesn't know the final
+    length up front, so it fills the RIFF size and ``data`` chunk size fields
+    with the streaming placeholder ``0xFFFFFFFF``. That's fine for a live
+    stream but produces a file some WAV parsers read incorrectly (e.g.
+    Python's own ``wave`` module reports a ~27-hour duration for a 5-second
+    clip) — live-confirmed 2026-08-14. Rewrite both fields now that the true
+    size is known.
+    """
+    import struct
+
+    if len(wav_bytes) < 44 or wav_bytes[:4] != b"RIFF" or wav_bytes[8:12] != b"WAVE":
+        return wav_bytes
+    patched = bytearray(wav_bytes)
+    patched[4:8] = struct.pack("<I", len(wav_bytes) - 8)
+    data_offset = wav_bytes.find(b"data")
+    if data_offset != -1 and data_offset + 8 <= len(wav_bytes):
+        patched[data_offset + 4 : data_offset + 8] = struct.pack(
+            "<I", len(wav_bytes) - (data_offset + 8)
+        )
+    return bytes(patched)
 
 
 def _maybe_parse_event(frame: str) -> dict[str, Any]:
