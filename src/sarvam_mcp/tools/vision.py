@@ -6,7 +6,7 @@ The Document Intelligence API is a multi-step pipeline:
   3. Upload the file to the presigned URL (PUT to Azure/GCS SAS URL)
   4. Start the job  (POST /doc-digitization/job/v1/{job_id}/start)
   5. Poll status    (GET  /doc-digitization/job/v1/{job_id}/status)
-  6. Download output from the presigned output URL
+  6. Download output URLs from the download-files endpoint
 
 We expose two MCP tools:
   - sarvam_tools_vision_extract: orchestrates the full pipeline end-to-end
@@ -27,6 +27,7 @@ from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
 
 DOC_JOB_BASE = "/doc-digitization/job/v1"
 DOC_JOB_UPLOAD = f"{DOC_JOB_BASE}/upload-files"
+DOC_JOB_DOWNLOAD = f"{DOC_JOB_BASE}/{{job_id}}/download-files"
 
 OutputFormat = Literal["md", "html", "json"]
 
@@ -45,8 +46,8 @@ def register(mcp: FastMCP) -> None:
             "preservation. Outputs markdown (default), HTML, or JSON.\n\n"
             "This runs the full async pipeline: create job → upload file → "
             "start → poll until complete. Max 10 pages per document.\n\n"
-            "Returns the output download URL (presigned) and job metadata. "
-            "The output is delivered as a ZIP file containing the chosen format "
+            "Returns download URLs for the processed output along with job metadata.\n\n"
+            "The download URLs point to a ZIP archive containing the chosen format "
             "plus a JSON file with page-level data."
         ),
     )
@@ -158,12 +159,22 @@ def register(mcp: FastMCP) -> None:
                         "observability": metrics.to_response_block(),
                     }
 
+        # Step 6: Fetch download URLs for successful jobs
+        download_urls = None
+        if status_resp.get("job_state") in {"Completed", "PartiallyCompleted"}:
+            download_resp, call = await sc.client.post_json(
+                DOC_JOB_DOWNLOAD.format(job_id=job_id),
+                json_body={},
+            )
+            metrics.merge(call)
+            download_urls = download_resp.get("download_urls", {})
+
         return {
             "job_id": job_id,
             "job_state": status_resp.get("job_state"),
             "output_format": output_format,
             "page_metrics": status_resp.get("page_metrics"),
-            "output_storage_path": status_resp.get("output_storage_path"),
+            "download_urls": download_urls,
             "raw_status": status_resp,
             "observability": metrics.to_response_block(),
         }
@@ -173,8 +184,8 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Runtime tool — calls Sarvam API now.\n\n"
             "Poll the status of an existing Document Intelligence job. "
-            "Returns the current job state and page metrics. Once state is "
-            "'Completed', the output can be downloaded from the output URL."
+            "Returns the current job state, page metrics, and presigned download "
+            "URLs for the ZIP archive when the job has completed."
         ),
     )
     async def sarvam_vision_job_status(
@@ -188,11 +199,21 @@ def register(mcp: FastMCP) -> None:
             )
             metrics.merge(call)
 
+        # Fetch download URLs for successful jobs
+        download_urls = None
+        if status_resp.get("job_state") in {"Completed", "PartiallyCompleted"}:
+            download_resp, call = await sc.client.post_json(
+                DOC_JOB_DOWNLOAD.format(job_id=job_id),
+                json_body={},
+            )
+            metrics.merge(call)
+            download_urls = download_resp.get("download_urls")
+
         return {
             "job_id": job_id,
             "job_state": status_resp.get("job_state"),
             "page_metrics": status_resp.get("page_metrics"),
-            "output_storage_path": status_resp.get("output_storage_path"),
+            "download_urls": download_urls,
             "raw": status_resp,
             "observability": metrics.to_response_block(),
         }
