@@ -1,44 +1,44 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any , Literal
+from typing import Any, Literal
 
-from fastmcp import Context,FastMCP
-from pydantic import Field 
+from fastmcp import Context, FastMCP
+from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import(
+from sarvam_mcp.tools._common import (
     LanguageCode,
     ready_ctx,
     resolve_file_input,
 )
-
 from sarvam_mcp.workflows._helpers import (
     stt_transcribe_with_timestamps,
     translate_text,
 )
 
-def _format_timestamp(seconds:float, fmt:Literal['srt','vtt'] = 'srt') -> str:
+
+def _format_timestamp(seconds: float, fmt: Literal["srt", "vtt"] = "srt") -> str:
     """Format seconds into SRT (00:00:01,500) or WebVTT (00:00:01.500) format."""
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
     millis = int(round((seconds - int(seconds)) * 1000))
-    
+
     if millis >= 1000:
-        secs+=1
-        millis= 0
+        secs += 1
+        millis = 0
 
     sep = "," if fmt == "srt" else "."
     return f"{hours:02d}:{minutes:02d}:{secs:02d}{sep}{millis:03d}"
+
 
 def _build_subtitle_blocks(
     timestamps: list[dict[str, Any]],
     fmt: Literal["srt", "vtt"] = "srt",
     max_words_per_block: int = 8,
+    max_duration_seconds: float = 5.0,
 ) -> str:
-    """Grouping timestamps word item into subtitle blocks."""
-
+    """Group timestamped word items into subtitle blocks."""
     if not timestamps:
         return ""
 
@@ -47,15 +47,15 @@ def _build_subtitle_blocks(
     if fmt == "vtt":
         blocks.append("WEBVTT\n")
 
-    current_words : list[str] = []
-    block_start : float | None = None
-    block_end : float = 0.0
+    current_words: list[str] = []
+    block_start: float | None = None
+    block_end: float = 0.0
     index = 1
 
     for item in timestamps:
-        word = item.get('word') or item.get('text') or ""
+        word = item.get("word") or item.get("text") or ""
         start = float(item.get("start_time_seconds") or item.get("start") or 0.0)
-        end = float(item.get("end_time_seconds") or item.get('end') or 0.0)
+        end = float(item.get("end_time_seconds") or item.get("end") or 0.0)
 
         if block_start is None:
             block_start = start
@@ -63,22 +63,24 @@ def _build_subtitle_blocks(
         current_words.append(word)
         block_end = end
 
-        if len(current_words) >= max_words_per_block:
-            text= " ".join(current_words)
-            t1 = _format_timestamp(block_start,fmt)
-            t2 = _format_timestamp(block_end,fmt)
+        # Flush block if max words or max duration exceeded
+        if len(current_words) >= max_words_per_block or (block_end - block_start) >= max_duration_seconds:
+            text = " ".join(current_words)
+            t1 = _format_timestamp(block_start, fmt)
+            t2 = _format_timestamp(block_end, fmt)
             blocks.append(f"{index}\n{t1} --> {t2}\n{text}\n")
             index += 1
             current_words = []
             block_start = None
 
     if current_words and block_start is not None:
-        text = ' ' .join(current_words)
-        t1 = _format_timestamp(block_start,fmt)
-        t2 = _format_timestamp(block_end,fmt)
+        text = " ".join(current_words)
+        t1 = _format_timestamp(block_start, fmt)
+        t2 = _format_timestamp(block_end, fmt)
         blocks.append(f"{index}\n{t1} --> {t2}\n{text}\n")
 
-    return '\n'.join(blocks)
+    return "\n".join(blocks)
+
 
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
@@ -100,7 +102,8 @@ def register(mcp: FastMCP) -> None:
             default="unknown", description="Audio language code (e.g. 'hi-IN'). Use 'unknown' to auto-detect."
         ),
         target_language_code: LanguageCode | None = Field(
-            default=None, description="Optional target language code to translate subtitles to (e.g. 'en-IN')."
+            default=None,
+            description="Optional target language code to translate subtitles to (e.g. 'en-IN').",
         ),
         format: Literal["srt", "vtt"] = Field(
             default="srt", description="Subtitle output format: 'srt' (default) or 'vtt'."
@@ -115,6 +118,10 @@ def register(mcp: FastMCP) -> None:
                 transcript, detected_lang, timestamps = await stt_transcribe_with_timestamps(
                     sc, path, language_code=language_code, metrics=metrics
                 )
+
+                if not transcript.strip() or not timestamps:
+                    raise RuntimeError("STT returned empty transcript or no timestamps")
+
                 source_lang = detected_lang or (language_code if language_code != "unknown" else "hi-IN")
 
                 # Build original subtitle content
@@ -149,5 +156,3 @@ def register(mcp: FastMCP) -> None:
             "subtitle_file_path": str(out_path),
             "observability": metrics.to_response_block(),
         }
-
-
