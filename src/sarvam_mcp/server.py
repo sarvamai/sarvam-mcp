@@ -134,6 +134,7 @@ def build_server() -> FastMCP:
     workflows.dub.register(mcp)
     workflows.localize.register(mcp)
     workflows.recall.register(mcp)
+    workflows.meet.register(mcp)
 
     return mcp
 
