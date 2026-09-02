@@ -22,6 +22,11 @@ EXPECTED_TOOLS = {
     "sarvam_tools_text_analytics",
     "sarvam_tools_llm_complete",
     "sarvam_tools_vision_extract",
+    # Pronunciation dictionary CRUD
+    "sarvam_tools_pronunciation_list",
+    "sarvam_tools_pronunciation_get",
+    "sarvam_tools_pronunciation_create",
+    "sarvam_tools_pronunciation_delete",
     # Composite /sv-* workflows
     "sarvam_tools_voice",
     "sarvam_tools_dub",
