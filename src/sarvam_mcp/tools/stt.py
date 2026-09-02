@@ -319,26 +319,34 @@ def register(mcp: FastMCP) -> None:
                         "observability": metrics.to_response_block(),
                     }
 
-                # Step 6: Extract transcript
-                result = status_resp.get("result") or {}
-                transcript = result.get("transcript") or status_resp.get("transcript")
+                # Step 6: /status carries no transcript — fetch it via download-files.
+                result: dict[str, Any] = {}
+                output_files: list[str] = []
+                for task in status_resp.get("job_details", []):
+                    if task.get("state") == "Success":
+                        for out in task.get("outputs", []):
+                            output_files.append(out["file_name"])
 
-                if not transcript:
-                    download_urls = status_resp.get("download_urls", {})
+                if output_files:
+                    await ctx.info("Fetching download links…")
+                    download_resp, call = await sc.client.post_json(
+                        STT_JOB_DOWNLOAD,
+                        json_body={"job_id": job_id, "files": output_files},
+                    )
+                    metrics.merge(call)
+                    download_urls = download_resp.get("download_urls", {})
                     if download_urls:
                         await ctx.info("Downloading transcript…")
                         dl_url = next(iter(download_urls.values()))["file_url"]
                         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as dl:
                             dl_resp = await dl.get(dl_url)
                         if dl_resp.is_success:
-                            dl_body = dl_resp.json()
-                            transcript = dl_body.get("transcript", "")
-                            result = dl_body
+                            result = dl_resp.json()
 
         return {
             "job_id": job_id,
             "job_state": status_resp.get("job_state"),
-            "transcript": transcript or "",
+            "transcript": result.get("transcript", ""),
             "language_code": result.get("language_code"),
             "diarized_transcript": result.get("diarized_transcript"),
             "timestamps": result.get("timestamps"),
