@@ -47,6 +47,14 @@ def test_recommend_returns_unmatched_for_unrelated():
     assert result["matched"] is False
 
 
+def test_recommend_long_audio_points_at_job_v1_not_job_init():
+    result = _recommend("transcribe a long Hindi meeting recording")
+    assert result["matched"]
+    taught = " ".join(str(value) for value in result.values())
+    assert "/speech-to-text/job/v1" in taught
+    assert "/speech-to-text/job/init" not in taught
+
+
 # ---- validate -------------------------------------------------------------
 
 

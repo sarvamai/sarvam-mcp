@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from sarvam_mcp.code import _data
+from sarvam_mcp.tools.stt import STT_JOB_BASE
+
+_OBSOLETE_BATCH_STT_PATH = "/speech-to-text/job/init"
 
 
 def test_all_languages_have_required_fields():
@@ -40,3 +43,29 @@ def test_pricing_table_covers_every_model_in_reference():
     # Every referenced model must appear in PRICING.
     missing = referenced_models - _data.PRICING.keys()
     assert not missing, f"Pricing entries missing for: {missing}"
+
+
+def test_batch_stt_reference_uses_runtime_job_v1_path():
+    # Builder tables must document the same create-job path the runtime tool calls.
+    assert STT_JOB_BASE == "/speech-to-text/job/v1"
+    job_keys = [key for key in _data.API_REFERENCE if "job" in key]
+    assert STT_JOB_BASE in _data.API_REFERENCE, (
+        f"{STT_JOB_BASE!r} is not a key in API_REFERENCE; job keys present: {job_keys}"
+    )
+    assert _OBSOLETE_BATCH_STT_PATH not in _data.API_REFERENCE, (
+        f"{_OBSOLETE_BATCH_STT_PATH!r} must not remain as the batch-STT reference key"
+    )
+
+
+def test_batch_stt_reference_describes_job_parameters_create_shape():
+    # Create-job is POST {job_parameters} → job_id. SAS URLs come from a later
+    # /upload-files call, not from the create response.
+    ref = _data.API_REFERENCE[STT_JOB_BASE]
+    request_body = ref.get("request_body") or {}
+    response = ref.get("response") or {}
+
+    assert ref.get("method") == "POST"
+    assert "job_parameters" in request_body
+    assert "job_id" in response
+    assert "input_storage_path" not in response
+    assert "output_storage_path" not in response
