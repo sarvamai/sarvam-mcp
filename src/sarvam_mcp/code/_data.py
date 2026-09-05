@@ -161,7 +161,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "notes": (
             "Saaras v4 is the latest, recommended model (22 Indic languages + Global/Indian English). "
             "It supports 5 output modes via the `mode` parameter, same as v3. "
-            "For >30s audio, use /speech-to-text/job/init."
+            "For >30s audio, use /speech-to-text/job/v1."
         ),
     },
     "/speech-to-text-translate": {
@@ -180,22 +180,26 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "notes": "DEPRECATED. Migrate to /speech-to-text with model=saaras:v4 and mode=translate.",
     },
-    "/speech-to-text/job/init": {
+    "/speech-to-text/job/v1": {
         "method": "POST",
         "model": "saaras:v4 (recommended, latest)",
         "content_type": "application/json",
+        "auth_header": "api-subscription-key",
         "request_body": {
-            "model":           "str",
-            "with_timestamps": "bool",
-            "language_code":   "str (optional)",
+            "job_parameters": "object — {model, mode, language_code, with_timestamps, with_diarization, num_speakers}",
         },
         "response": {
-            "job_id":                  "str",
-            "input_storage_path":      "str — Azure Blob SAS URL (PUT audio here)",
-            "output_storage_path":     "str — Azure Blob SAS URL (poll for results)",
-            "storage_container_type":  "str — 'Azure'",
+            "job_id": "str",
         },
-        "notes": "Async batch flow: init -> upload to SAS -> poll /speech-to-text/job/status?job_id=...",
+        "notes": (
+            "Async batch flow for audio >30s: create job (this endpoint) → "
+            "get upload URLs (/speech-to-text/job/v1/upload-files) → "
+            "PUT audio to the returned SAS URL → "
+            "start (/speech-to-text/job/v1/{job_id}/start) → "
+            "poll status (GET /speech-to-text/job/v1/{job_id}/status) → "
+            "read the transcript from status or download-files. "
+            "SAS URLs are not returned by create."
+        ),
     },
     "/translate": {
         "method": "POST",
