@@ -27,7 +27,7 @@ ApiName = Literal[
 EndpointPath = Literal[
     "/speech-to-text",
     "/speech-to-text-translate",
-    "/speech-to-text/job/init",
+    "/speech-to-text/job/v1",
     "/text-to-speech",
     "/translate",
     "/transliterate",

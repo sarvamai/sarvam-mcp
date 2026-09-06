@@ -164,7 +164,7 @@ def _recommend(task: str) -> dict[str, Any]:
             snippet_key=("stt", "python"),
             extras={
                 "mode": "transcribe",
-                "tip_long_audio": "For audio >30s, use /speech-to-text/job/init for the async batch flow.",
+                "tip_long_audio": "For audio >30s, use /speech-to-text/job/v1 for the async batch flow.",
             },
         )
 
