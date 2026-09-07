@@ -7,6 +7,7 @@ future sessions.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 from pathlib import Path
@@ -82,7 +83,10 @@ def register(mcp: FastMCP) -> None:
 
 def _save_key(api_key: str) -> None:
     """Save API key to ~/.sarvam/credentials, preserving other settings."""
-    CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # mode=0o700 so the directory is not world-traversable. mkdir ignores
+    # ``mode`` when the directory already exists, so tighten it explicitly.
+    CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    _restrict_dir_permissions(CREDENTIALS_PATH.parent)
 
     preserved: list[str] = []
     if CREDENTIALS_PATH.exists():
@@ -101,10 +105,36 @@ def _save_key(api_key: str) -> None:
     for line in preserved:
         body += f"{line}\n"
 
+    # Create the temp file with owner-only permissions *before* writing the
+    # key, so the secret is never briefly readable by other local users.
+    # Writing first and chmod-ing after leaves a window where the file sits
+    # on disk at 0o666 & ~umask (0o644 under the default umask of 022).
     tmp = CREDENTIALS_PATH.with_suffix(".tmp")
-    tmp.write_text(body)
+    _write_private(tmp, body)
     _restrict_permissions(tmp)
     tmp.replace(CREDENTIALS_PATH)
+
+
+def _write_private(path: Path, body: str) -> None:
+    """Write ``body`` to ``path``, owner-only from the moment it exists.
+
+    ``os.open`` with ``O_CREAT`` applies ``mode`` atomically at creation time
+    (subject to umask, which can only remove bits), so there is no window in
+    which the file is more permissive than 0o600. On Windows the mode argument
+    is largely ignored; ``_restrict_permissions`` handles that platform.
+    """
+    if path.exists():
+        path.unlink()
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(body)
+
+
+def _restrict_dir_permissions(path: Path) -> None:
+    """Make the credentials directory owner-only where the OS supports it."""
+    if sys.platform != "win32":
+        with contextlib.suppress(OSError):  # best effort
+            os.chmod(path, 0o700)
 
 
 def _restrict_permissions(path: Path) -> None:
