@@ -48,26 +48,39 @@ def test_credentials_dir_is_not_world_traversable(creds_path):
 def test_key_is_never_written_at_permissive_mode(creds_path, monkeypatch):
     """Regression guard for the write-then-chmod race.
 
-    Records the mode at the moment the file is first created. The original
-    implementation called ``Path.write_text`` and only chmod-ed afterwards,
-    leaving the secret at 0o644 under the default umask in between.
+    Captures the mode of every file in the credentials directory at the moment
+    ``os.chmod`` is first called, i.e. the state a concurrent local reader would
+    have seen. The original implementation wrote the key via ``Path.write_text``
+    and only tightened it afterwards, so the secret sat at 0o644 under the
+    default umask until the chmod landed.
+
+    Deliberately does not spy on ``os.open``: that would assert *how* the file
+    is created rather than that it is never exposed, and would pass vacuously
+    against any implementation using a different write API.
     """
-    observed: list[int] = []
-    real_open = os.open
+    observed: dict[str, int] = {}
+    real_chmod = os.chmod
 
-    def spy(path, flags, mode=0o777, *args, **kwargs):
-        fd = real_open(path, flags, mode, *args, **kwargs)
-        if str(path).endswith(".tmp") and (flags & os.O_CREAT):
-            observed.append(stat.S_IMODE(os.fstat(fd).st_mode))
-        return fd
+    def record_dir_state():
+        d = creds_path.parent
+        if not d.exists():
+            return
+        for child in d.iterdir():
+            if child.is_file() and child.name not in observed:
+                observed[child.name] = stat.S_IMODE(child.stat().st_mode)
 
-    monkeypatch.setattr(os, "open", spy)
+    def spy(path, mode, *args, **kwargs):
+        record_dir_state()
+        return real_chmod(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "chmod", spy)
     auth_tool._save_key(KEY)
+    record_dir_state()
 
-    assert observed, "temp credentials file was never created via os.open"
-    for mode in observed:
+    assert observed, "no credentials file was ever observed on disk"
+    for name, mode in observed.items():
         assert not mode & (stat.S_IRGRP | stat.S_IROTH), (
-            f"key file was created at {oct(mode)} — readable by group/other"
+            f"{name} existed at {oct(mode)} — readable by group/other before it was locked down"
         )
 
 
