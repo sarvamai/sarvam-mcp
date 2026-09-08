@@ -7,7 +7,6 @@ future sessions.
 
 from __future__ import annotations
 
-import contextlib
 import os
 import sys
 from pathlib import Path
@@ -122,19 +121,26 @@ def _write_private(path: Path, body: str) -> None:
     (subject to umask, which can only remove bits), so there is no window in
     which the file is more permissive than 0o600. On Windows the mode argument
     is largely ignored; ``_restrict_permissions`` handles that platform.
+
+    ``missing_ok=True`` rather than an ``exists()`` guard: the check-then-unlink
+    pair races with anything else touching the temp path, and O_EXCL is what
+    actually enforces that we own the file we are about to write.
     """
-    if path.exists():
-        path.unlink()
+    path.unlink(missing_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as fh:
         fh.write(body)
 
 
 def _restrict_dir_permissions(path: Path) -> None:
-    """Make the credentials directory owner-only where the OS supports it."""
+    """Make the credentials directory owner-only where the OS supports it.
+
+    Lets ``OSError`` propagate, as the POSIX branch of ``_restrict_permissions``
+    does: silently leaving ~/.sarvam world-traversable while reporting the key
+    as saved is not a failure mode worth hiding from the user.
+    """
     if sys.platform != "win32":
-        with contextlib.suppress(OSError):  # best effort
-            os.chmod(path, 0o700)
+        os.chmod(path, 0o700)
 
 
 def _restrict_permissions(path: Path) -> None:

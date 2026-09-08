@@ -116,3 +116,66 @@ def test_overwriting_an_existing_permissive_file_tightens_it(creds_path):
     auth_tool._save_key(KEY)
 
     assert _mode(creds_path) == 0o600
+
+
+def test_stale_temp_file_does_not_break_the_write(creds_path):
+    """A leftover .tmp from a crashed run must be replaced, not fatal."""
+    creds_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = creds_path.with_suffix(".tmp")
+    tmp.write_text("api_key = sk_stale\n")
+
+    auth_tool._save_key(KEY)
+
+    assert f"api_key = {KEY}" in creds_path.read_text()
+    assert _mode(creds_path) == 0o600
+    assert not tmp.exists()
+
+
+def test_temp_file_vanishing_mid_write_is_not_an_error(creds_path, monkeypatch):
+    """Regression guard for the check-then-unlink TOCTOU.
+
+    Simulates the racing reaper: the temp file is still present when
+    ``_write_private`` decides to remove it, but something else (a tmpreaper, a
+    concurrent save) has deleted it by the time the unlink lands. The old
+    ``if path.exists(): path.unlink()`` pair surfaced that as FileNotFoundError;
+    ``missing_ok=True`` absorbs it and lets O_EXCL do the real enforcement.
+
+    Patches ``os.unlink`` — the syscall ``Path.unlink`` delegates to — rather
+    than the Path method, so the fixture's CREDENTIALS_PATH patch stays intact
+    and the test cannot escape tmp_path onto the real ~/.sarvam.
+    """
+    creds_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = creds_path.with_suffix(".tmp")
+    tmp.write_text("api_key = sk_stale\n")
+
+    real_unlink = os.unlink
+    raced = {"done": False}
+
+    def vanishing_unlink(path, *args, **kwargs):
+        if not raced["done"] and os.fspath(path) == str(tmp):
+            raced["done"] = True
+            real_unlink(path)  # the reaper wins the race
+            raise FileNotFoundError(path)
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", vanishing_unlink)
+    auth_tool._save_key(KEY)
+
+    assert raced["done"], "the simulated race never triggered"
+    assert f"api_key = {KEY}" in creds_path.read_text()
+    assert _mode(creds_path) == 0o600
+
+
+def test_directory_chmod_failure_is_surfaced(creds_path, monkeypatch):
+    """A directory we cannot lock down must fail loudly, not report success."""
+    real_chmod = os.chmod
+
+    def failing_chmod(path, mode, *args, **kwargs):
+        if os.path.isdir(path):
+            raise PermissionError(path)
+        return real_chmod(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "chmod", failing_chmod)
+
+    with pytest.raises(PermissionError):
+        auth_tool._save_key(KEY)
