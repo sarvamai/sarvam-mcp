@@ -41,6 +41,9 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.8",
 ]
+memory = [
+    "cognicore-env>=0.1.0",
+]
 
 [project.scripts]
 sarvam-mcp = "sarvam_mcp.server:main"
