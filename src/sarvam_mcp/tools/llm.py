@@ -24,7 +24,9 @@ def register(mcp: FastMCP) -> None:
             "Generate chat completions with Sarvam's Indic-tuned LLM.\n\n"
             "Model: `sarvam-105b` — MoE flagship, best reasoning + tool use. "
             "Supports 23 Indic languages with native, romanized, and "
-            "code-mixed styles. OpenAI-compatible message format."
+            "code-mixed styles. `sarvam-105b-conversations` is the same "
+            "family tuned for real-time dialogue / voice agents (32K "
+            "context). Both are OpenAI-compatible."
         ),
     )
     async def sarvam_llm_complete(
@@ -37,7 +39,10 @@ def register(mcp: FastMCP) -> None:
         ),
         model: SarvamLLM = Field(
             default="sarvam-105b",
-            description="`sarvam-105b` (flagship, the only current chat model).",
+            description=(
+                "`sarvam-105b` (flagship, default) | `sarvam-105b-conversations` "
+                "(voice/real-time variant)."
+            ),
         ),
         temperature: float = Field(default=0.7, ge=0.0, le=2.0),
         top_p: float = Field(default=1.0, ge=0.0, le=1.0),
@@ -93,7 +98,7 @@ def register(mcp: FastMCP) -> None:
             if not content:
                 result["truncation_warning"] = (
                     "max_tokens was reached before any visible content was produced — "
-                    "consumed entirely by sarvam-105b's reasoning. Raise max_tokens "
+                    "consumed entirely by the model's reasoning. Raise max_tokens "
                     "substantially (300+) and/or pass reasoning_effort='low'; omitting "
                     "max_tokens entirely is the most reliable fix."
                 )

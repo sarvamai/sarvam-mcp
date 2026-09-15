@@ -1,4 +1,4 @@
-"""Speech-to-text tools — transcribe (Saaras v4), translate (legacy), batch jobs."""
+"""Speech-to-text tools — transcribe (Saaras v4), batch jobs."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
 
 STT_PATH = "/speech-to-text"
-STT_TRANSLATE_PATH = "/speech-to-text-translate"
 STT_JOB_BASE = "/speech-to-text/job/v1"
 STT_JOB_UPLOAD = f"{STT_JOB_BASE}/upload-files"
 STT_JOB_DOWNLOAD = f"{STT_JOB_BASE}/download-files"
@@ -30,9 +29,6 @@ _MODE_CAPABLE_MODELS = {"saaras:v4", "saaras:v3"}
 SttMode = Literal["transcribe", "translate", "verbatim", "translit", "codemix"]
 
 InputAudioCodec = Literal["pcm_s16le", "pcm_l16", "pcm_raw"]
-
-# Legacy model types kept for the deprecated translate tool.
-SaarasModel = Literal["saaras:v4", "saaras:v3", "saaras:v3-realtime", "saaras:v2.5"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -125,62 +121,6 @@ def register(mcp: FastMCP) -> None:
             "language_probability": payload.get("language_probability"),
             "diarized_transcript": payload.get("diarized_transcript"),
             "timestamps": payload.get("timestamps"),
-            "observability": metrics.to_response_block(),
-        }
-
-    @mcp.tool(
-        name="sarvam_tools_stt_translate",
-        description=(
-            "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "DEPRECATED: Use `sarvam_tools_stt_transcribe` with `mode='translate'` instead.\n\n"
-            "Transcribe an Indic-language audio file directly into English text "
-            "using the legacy `/speech-to-text-translate` endpoint. "
-            "This endpoint will be removed in a future version."
-        ),
-    )
-    async def sarvam_stt_translate(
-        ctx: Context,
-        audio_path: str | None = Field(default=None, description="Local path to the audio file."),
-        audio_base64: str | None = Field(default=None, description="Base64-encoded audio data."),
-        audio_url: str | None = Field(default=None, description="URL to fetch the audio file from."),
-        filename: str | None = Field(default=None, description="Filename with extension (for base64/URL)."),
-        with_diarization: bool = Field(
-            default=False, description="Return per-speaker turns."
-        ),
-        model: SaarasModel = Field(
-            default="saaras:v2.5",
-            description=(
-                "Legacy Saaras model for the /speech-to-text-translate endpoint. "
-                "Prefer using sarvam_tools_stt_transcribe with mode='translate' and saaras:v4."
-            ),
-        ),
-    ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        async with resolve_file_input(
-            file_path=audio_path, file_base64=audio_base64,
-            file_url=audio_url, filename=filename,
-        ) as path:
-            with measure_tool() as metrics:
-                with path.open("rb") as fh:
-                    files = {"file": (path.name, fh, _guess_audio_mime(path))}
-                    data: dict[str, Any] = {
-                        "model": model,
-                        "with_diarization": str(with_diarization).lower(),
-                    }
-                    payload, call = await sc.client.post_multipart(
-                        STT_TRANSLATE_PATH, data=data, files=files
-                    )
-                metrics.merge(call)
-
-        return {
-            "transcript": payload.get("transcript", ""),
-            "language_code": payload.get("language_code"),
-            "diarized_transcript": payload.get("diarized_transcript"),
-            "deprecation_notice": (
-                "This tool uses the legacy /speech-to-text-translate endpoint. "
-                "Migrate to sarvam_tools_stt_transcribe with "
-                "mode='translate' and model='saaras:v4'."
-            ),
             "observability": metrics.to_response_block(),
         }
 

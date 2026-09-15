@@ -58,7 +58,10 @@ def register(mcp: FastMCP) -> None:
         speech_sample_rate: SampleRate = Field(
             default=24000, description="PCM sample rate of the output WAV."
         ),
-        pace: float = Field(default=1.0, ge=0.3, le=3.0),
+        pace: float = Field(
+            default=1.0, ge=0.5, le=2.0,
+            description="Speech pace, 0.5 (slowest) to 2.0 (fastest).",
+        ),
         enable_preprocessing: bool = Field(
             default=True,
             description="Normalize numbers/dates/code-mixed segments before synthesis.",
@@ -126,7 +129,10 @@ def register(mcp: FastMCP) -> None:
         text: str = Field(description="Text to synthesize."),
         target_language_code: TtsLanguageCode = Field(),
         speaker: BulbulSpeaker = Field(default="priya"),
-        pace: float = Field(default=1.0, ge=0.3, le=3.0),
+        pace: float = Field(
+            default=1.0, ge=0.5, le=2.0,
+            description="Speech pace, 0.5 (slowest) to 2.0 (fastest).",
+        ),
         model: TtsModel = Field(default="bulbul:v3"),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)

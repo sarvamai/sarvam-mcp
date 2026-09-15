@@ -91,7 +91,6 @@ def register(mcp: FastMCP) -> None:
         endpoint: Literal[
             "/text-to-speech",
             "/speech-to-text",
-            "/speech-to-text-translate",
             "/translate",
             "/transliterate",
             "/text-lid",
@@ -226,7 +225,7 @@ def _recommend(task: str) -> dict[str, Any]:
     if re.search(r"\b(ocr|document|pdf|image|extract text|scan|invoice|receipt)\b", t):
         return _result(
             model="sarvam-vision",
-            endpoint="/doc-digitization/job/v1",
+            endpoint="/doc-ai/v1/job/digitise",
             why="Document Intelligence — extracts text, tables, and structure from PDFs/images in 23 languages.",
             language_code=detected_lang,
             snippet_key=None,
@@ -282,11 +281,10 @@ def _result(
 # ---- request validation ---------------------------------------------------
 
 _VALID_TTS_MODELS = {"bulbul:v3"}
-_VALID_LLM_MODELS = {"sarvam-105b"}
+_VALID_LLM_MODELS = {"sarvam-105b", "sarvam-105b-conversations"}
 _VALID_TRANSLATE_MODELS = {"mayura:v1", "sarvam-translate:v1"}
 _VALID_STT_MODELS = {"saaras:v4", "saaras:v3"}
 _VALID_STT_MODES = {"transcribe", "translate", "verbatim", "translit", "codemix"}
-_VALID_SAARAS_MODELS = {"saaras:v4", "saaras:v3", "saaras:v3-realtime", "saaras:v2.5"}
 _VALID_LANGUAGE_CODES = {lang["code"] for lang in _data.ALL_LANGUAGES} | {"auto", "unknown"}
 _TTS_LANG_CODES = {lang["code"] for lang in _data.LANGUAGES_BY_API["tts"]}
 
@@ -350,12 +348,6 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
         lc = body.get("language_code", "unknown")
         if lc not in _VALID_LANGUAGE_CODES:
             issues.append(_err("language_code", f"Unknown code '{lc}'."))
-
-    elif endpoint == "/speech-to-text-translate":
-        model = body.get("model", "saaras:v3")
-        if model not in _VALID_SAARAS_MODELS:
-            issues.append(_err("model", f"'{model}' invalid.",
-                               f"Use one of: {sorted(_VALID_SAARAS_MODELS)}"))
 
     elif endpoint == "/translate":
         for f in ("input", "source_language_code", "target_language_code"):
