@@ -151,9 +151,11 @@ BulbulSpeaker = Literal[
     "mohit", "kavitha", "rehan", "soham", "rupali", "niharika",
 ]
 
-# Chat completions — same IDs as ``sarvam_tools_llm_complete``.
-# sarvam-30b was deprecated by Sarvam; sarvam-105b is the sole current model.
-SarvamLLM = Literal["sarvam-105b"]
+# Chat completions on /v1 — same IDs as ``sarvam_tools_llm_complete``.
+# sarvam-30b and sarvam-m were deprecated by Sarvam. sarvam-105b is the
+# flagship model; sarvam-105b-conversations is the real-time/voice-agent
+# variant (32K context, /v1 only).
+SarvamLLM = Literal["sarvam-105b", "sarvam-105b-conversations"]
 
 
 # ---- Translate-mode + script enums ---------------------------------------

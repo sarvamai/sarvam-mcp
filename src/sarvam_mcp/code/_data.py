@@ -60,7 +60,6 @@ _LID_CODES = {
 # Per-API language coverage. Keys match what the agent might pass.
 LANGUAGES_BY_API: dict[str, list[dict[str, str]]] = {
     "stt":           ALL_LANGUAGES,
-    "stt_translate": ALL_LANGUAGES,    # Saaras takes any input; output is always English.
     "tts":           [lang for lang in ALL_LANGUAGES if lang["code"] in _TTS_CODES],
     "translate":     ALL_LANGUAGES,    # sarvam-translate:v1 covers all; mayura:v1 only TTS subset.
     "transliterate": ALL_LANGUAGES,
@@ -164,22 +163,6 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "For >30s audio, use /speech-to-text/job/init."
         ),
     },
-    "/speech-to-text-translate": {
-        "method": "POST",
-        "model": "saaras:v2.5 (DEPRECATED — use /speech-to-text with mode=translate instead)",
-        "content_type": "multipart/form-data",
-        "auth_header": "api-subscription-key",
-        "request_body": {
-            "file":             "binary, required",
-            "model":            "str — saaras:v2.5",
-            "with_diarization": "bool",
-        },
-        "response": {
-            "transcript":           "str — always English",
-            "language_code":        "str — detected source language",
-        },
-        "notes": "DEPRECATED. Migrate to /speech-to-text with model=saaras:v4 and mode=translate.",
-    },
     "/speech-to-text/job/init": {
         "method": "POST",
         "model": "saaras:v4 (recommended, latest)",
@@ -276,6 +259,8 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "notes": (
             "OpenAI-compatible. sarvam-30b and sarvam-m were deprecated by "
             "Sarvam; sarvam-105b is the flagship model on this v1 endpoint. "
+            "sarvam-105b-conversations (real-time/voice-agent variant, 32K "
+            "context) also lives on /v1 only. "
             "GOTCHA (live-confirmed 2026-08-14): sarvam-105b reasons by "
             "default even without reasoning_effort set, and reasoning tokens "
             "count against max_tokens. A small max_tokens (e.g. 20-100) can "
@@ -284,37 +269,39 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "headroom (300+) or omit max_tokens; reasoning_effort='low' "
             "reduces but does not eliminate this. "
             "There is also a /v2/chat/completions endpoint that additionally "
-            "serves sarvam-105b-conversations and other (beta, fast-changing) "
-            "open-weight models — not covered here; check docs.sarvam.ai for "
-            "the current v2 model list before relying on a specific one."
+            "serves other (beta, fast-changing) open-weight models — not "
+            "covered here; check docs.sarvam.ai for the current v2 model "
+            "list before relying on a specific one."
         ),
     },
-    "/doc-digitization/job/v1": {
+    "/doc-ai/v1/job/digitise": {
         "method": "POST",
         "model": "Sarvam Vision (3B parameter VLM)",
-        "content_type": "application/json",
+        "content_type": "multipart/form-data",
         "request_body": {
-            "job_parameters": "object — {language: BCP-47 code, output_format: 'md'|'html'|'json'}",
-            "callback":       "object (optional) — {url: str, auth_token: str} for webhook",
+            "file":          "binary (form field) — PDF, PNG/JPG, or ZIP",
+            "language":      "str — BCP-47 code, e.g. 'hi-IN'",
+            "output_format": "str — 'md' | 'html' | 'json'",
         },
         "response": {
-            "job_id":                  "str (UUID)",
-            "storage_container_type":  "str",
-            "job_parameters":          "object",
-            "job_state":               "str — Accepted",
+            "job_id": "str (UUID)",
+            "status": "str — pending",
         },
         "notes": (
-            "Job-based async pipeline: create job → get upload URLs "
-            "(/doc-digitization/job/v1/upload-files) → PUT file to presigned URL → "
-            "start (/doc-digitization/job/v1/{job_id}/start) → "
-            "poll status (/doc-digitization/job/v1/{job_id}/status). "
-            "Max 10 pages per document. Output delivered as ZIP. "
-            "This endpoint still works (live-confirmed 2026-08-14), but Sarvam's "
-            "current docs describe a newer 'Doc AI' product at /doc-ai/v1/job/ "
-            "with separate digitise() (full-document OCR, same as this) and "
-            "extract() (schema-based field extraction — pull specific fields "
-            "instead of the whole document) operations, plus CSV/XLSX output. "
-            "Worth checking docs.sarvam.ai/docai for the current recommended path."
+            "Job-based async pipeline, single-call submission (no separate "
+            "upload-URL/blob-PUT/start steps like the older Document "
+            "Digitization API had): submit file → poll status "
+            "(/doc-ai/v1/job/{job_id}/status, states are lowercase: pending | "
+            "running | completed | partially_completed | failed | rejected) → "
+            "get download URL (/doc-ai/v1/job/{job_id}/download-url) → GET that "
+            "URL for a ZIP containing the output file + per-page metadata + "
+            "manifest. Max 10 pages per document. Rate limit: 10 req/min. "
+            "This supersedes the old /doc-digitization/job/v1 API per Sarvam's "
+            "Sept 2026 changelog. There's also a separate extract() operation "
+            "at /doc-ai/v1/job/extract for schema-based field extraction "
+            "(pulling specific fields instead of the whole document). "
+            "CAVEAT: based on docs.sarvam.ai as of 2026-09-15 — verify "
+            "against a live account before relying on it."
         ),
     },
     "/text-to-speech/pronunciation-dictionary": {
@@ -364,7 +351,8 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 # Pricing — point estimate; PER-USER RATES MAY VARY based on plan/contract.
 # Always direct end users to https://dashboard.sarvam.ai → Billing for live.
-# Last reviewed: 2026-04-27.
+# Last reviewed: 2026-04-27; sarvam-105b-conversations row added 2026-09-15
+# from docs.sarvam.ai (not live-confirmed).
 # ---------------------------------------------------------------------------
 
 PRICING: dict[str, dict[str, Any]] = {
@@ -376,6 +364,7 @@ PRICING: dict[str, dict[str, Any]] = {
     "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
     "sarvam-translate:v1":  {"unit": "per character",         "tier": "billed by character"},
     "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},
+    "sarvam-105b-conversations": {"unit": "per 1M tokens",    "tier": "billed by tokens, same rate as sarvam-105b (real-time/voice-agent variant, /v1 only)"},
     "sarvam-vision":        {"unit": "per page",              "tier": "billed by page"},
 }
 

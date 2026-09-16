@@ -11,7 +11,6 @@ EXPECTED_TOOLS = {
     "sarvam_tools_set_api_key",
     # Atomic — one tool per Sarvam endpoint
     "sarvam_tools_stt_transcribe",
-    "sarvam_tools_stt_translate",
     "sarvam_tools_stt_batch_submit",
     "sarvam_tools_stt_batch_status",
     "sarvam_tools_tts_speak",

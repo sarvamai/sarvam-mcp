@@ -21,12 +21,11 @@ from sarvam_mcp.code import _data
 # ---- Type literals -------------------------------------------------------
 
 ApiName = Literal[
-    "stt", "stt_translate", "tts", "translate", "transliterate",
+    "stt", "tts", "translate", "transliterate",
     "lid", "llm", "vision",
 ]
 EndpointPath = Literal[
     "/speech-to-text",
-    "/speech-to-text-translate",
     "/speech-to-text/job/init",
     "/text-to-speech",
     "/translate",
@@ -34,7 +33,7 @@ EndpointPath = Literal[
     "/text-lid",
     "/text-analytics",
     "/v1/chat/completions",
-    "/doc-digitization/job/v1",
+    "/doc-ai/v1/job/digitise",
     "/text-to-speech/pronunciation-dictionary",
     "/text-to-speech/ws",
 ]
