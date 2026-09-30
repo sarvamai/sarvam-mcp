@@ -51,7 +51,7 @@ def register(mcp: FastMCP) -> None:
             default="unknown",
             description="STT language hint. 'unknown' enables auto-detect.",
         ),
-        speaker: BulbulSpeaker = Field(default="priya"),
+        speaker: BulbulSpeaker = Field(default="shubh"),
         translate_model: str = Field(
             default="mayura:v1",
             description="`mayura:v1` (11 langs, modes) or `sarvam-translate:v1` (22 langs).",

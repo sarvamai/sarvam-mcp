@@ -20,8 +20,8 @@ def test_tts_languages_subset_of_all():
 
 
 def test_v3_speakers_count_matches_live_api():
-    # Discovered 2026-04-27 by triggering the API's validation error.
-    assert len(_data.V3_SPEAKERS) == 38
+    # Matches docs.sarvam.ai; 'niharika' was rejected live on 2026-09-29.
+    assert len(_data.V3_SPEAKERS) == 37
 
 
 def test_default_speaker_priya_is_v3():
