@@ -22,7 +22,7 @@ resp = httpx.post(
     json={
         "inputs": ["नमस्ते, आज मौसम कैसा है?"],
         "target_language_code": "hi-IN",
-        "speaker": "priya",         # v3 voice; see sarvam_code_speakers
+        "speaker": "shubh",         # v3 voice; see sarvam_code_speakers
         "model": "bulbul:v3",
         "speech_sample_rate": 24000,
         "enable_preprocessing": True,
@@ -51,7 +51,7 @@ const resp = await fetch("https://api.sarvam.ai/text-to-speech", {
   body: JSON.stringify({
     inputs: ["नमस्ते, आज मौसम कैसा है?"],
     target_language_code: "hi-IN",
-    speaker: "priya",          // v3 voice
+    speaker: "shubh",          // v3 voice
     model: "bulbul:v3",
     speech_sample_rate: 24000,
     enable_preprocessing: true,
@@ -72,7 +72,7 @@ curl -sS https://api.sarvam.ai/text-to-speech \\
   -d '{
     "inputs": ["नमस्ते, आज मौसम कैसा है?"],
     "target_language_code": "hi-IN",
-    "speaker": "priya",
+    "speaker": "shubh",
     "model": "bulbul:v3",
     "speech_sample_rate": 24000
   }' \\

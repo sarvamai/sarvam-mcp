@@ -64,10 +64,15 @@ def register(mcp: FastMCP) -> None:
                 "input language (or hi-IN if detection fails)."
             ),
         ),
-        speaker: BulbulSpeaker = Field(default="priya"),
+        speaker: BulbulSpeaker = Field(default="shubh"),
         llm_model: SarvamLLM = Field(
-            default="sarvam-105b",
-            description="`sarvam-105b` (flagship, the only current chat model).",
+            default="sarvam-105b-conversations",
+            description=(
+                "`sarvam-105b-conversations` (default, 32K ctx) — post-trained "
+                "for real-time dialogue/voice agents, which is what this workflow "
+                "is. Switch to `sarvam-105b` (128K ctx) only if a reply needs "
+                "deep reasoning, coding, or a long context window."
+            ),
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)

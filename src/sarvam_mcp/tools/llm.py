@@ -22,9 +22,17 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
             "Generate chat completions with Sarvam's Indic-tuned LLM.\n\n"
-            "Model: `sarvam-105b` — MoE flagship, best reasoning + tool use. "
+            "Two models on this endpoint:\n"
+            "- `sarvam-105b` (default) — 128K context, best for complex reasoning, "
+            "coding, long-context analysis, agentic tool use.\n"
+            "- `sarvam-105b-conversations` — 32K context, post-trained for "
+            "real-time dialogue and voice agents; more natural/colloquial Indic "
+            "replies. Same price as sarvam-105b. Prefer this one for low-latency "
+            "conversational loops (e.g. behind sarvam_tools_voice).\n\n"
             "Supports 23 Indic languages with native, romanized, and "
-            "code-mixed styles. OpenAI-compatible message format."
+            "code-mixed styles. OpenAI-compatible message format, including "
+            "function calling (`tools`/`tool_choice`) and structured output "
+            "(`response_format`)."
         ),
     )
     async def sarvam_llm_complete(
@@ -37,7 +45,10 @@ def register(mcp: FastMCP) -> None:
         ),
         model: SarvamLLM = Field(
             default="sarvam-105b",
-            description="`sarvam-105b` (flagship, the only current chat model).",
+            description=(
+                "`sarvam-105b` (flagship, 128K ctx) or `sarvam-105b-conversations` "
+                "(32K ctx, tuned for voice/chat-agent workloads)."
+            ),
         ),
         temperature: float = Field(default=0.7, ge=0.0, le=2.0),
         top_p: float = Field(default=1.0, ge=0.0, le=1.0),
@@ -58,6 +69,32 @@ def register(mcp: FastMCP) -> None:
             default=False,
             description="Streaming via MCP isn't useful for chat — keep False unless testing.",
         ),
+        stop: list[str] | None = Field(
+            default=None, description="Up to 4 stop sequences.",
+        ),
+        frequency_penalty: float | None = Field(default=None, ge=-2.0, le=2.0),
+        presence_penalty: float | None = Field(default=None, ge=-2.0, le=2.0),
+        seed: int | None = Field(
+            default=None, description="Beta: best-effort deterministic sampling.",
+        ),
+        n: int | None = Field(
+            default=None, ge=1, description="Number of completions to generate.",
+        ),
+        tools: list[dict[str, Any]] = Field(
+            default_factory=list,
+            description="OpenAI-style function-calling tool definitions.",
+        ),
+        tool_choice: str | dict[str, Any] | None = Field(
+            default=None,
+            description="'auto' | 'none' | 'required' | {'type': 'function', 'function': {'name': ...}}.",
+        ),
+        response_format: dict[str, Any] | None = Field(
+            default=None,
+            description=(
+                "Structured output: {'type': 'json_object'} or "
+                "{'type': 'json_schema', 'json_schema': {...}}."
+            ),
+        ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         body: dict[str, Any] = {
@@ -71,6 +108,22 @@ def register(mcp: FastMCP) -> None:
             body["max_tokens"] = max_tokens
         if reasoning_effort is not None:
             body["reasoning_effort"] = reasoning_effort
+        if stop is not None:
+            body["stop"] = stop
+        if frequency_penalty is not None:
+            body["frequency_penalty"] = frequency_penalty
+        if presence_penalty is not None:
+            body["presence_penalty"] = presence_penalty
+        if seed is not None:
+            body["seed"] = seed
+        if n is not None:
+            body["n"] = n
+        if tools:
+            body["tools"] = tools
+        if tool_choice is not None:
+            body["tool_choice"] = tool_choice
+        if response_format is not None:
+            body["response_format"] = response_format
 
         with measure_tool() as metrics:
             payload, call = await sc.client.post_json(CHAT_PATH, json_body=body)
@@ -84,6 +137,7 @@ def register(mcp: FastMCP) -> None:
         result: dict[str, Any] = {
             "content": content,
             "role": message.get("role", "assistant"),
+            "tool_calls": message.get("tool_calls"),
             "finish_reason": finish_reason,
             "usage": payload.get("usage"),
             "model": payload.get("model"),

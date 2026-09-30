@@ -87,7 +87,7 @@ async def tts_synthesize(
     text: str,
     *,
     target_language_code: str,
-    speaker: str = "priya",
+    speaker: str = "shubh",
     speech_sample_rate: int = 24000,
     model: str = "bulbul:v3",
     filename_prefix: str = "sv-out",

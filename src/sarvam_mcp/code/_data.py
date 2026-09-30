@@ -8,7 +8,7 @@ and what's documented at docs.sarvam.ai.
 Update cadence: bump these any time Sarvam adds a model/speaker/language
 or changes pricing. CI will surface a diff in PR review.
 
-Last verified live against api.sarvam.ai: 2026-04-27.
+Last verified live against api.sarvam.ai: 2026-09-28.
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ V3_SPEAKERS = [
     "simran", "kavya", "amit", "dev", "ishita", "shreya", "ratan", "varun",
     "manan", "sumit", "roopa", "kabir", "aayan", "shubh", "advait", "anand",
     "tanya", "tarun", "sunny", "mani", "gokul", "vijay", "shruti", "suhani",
-    "mohit", "kavitha", "rehan", "soham", "rupali", "niharika",
+    "mohit", "kavitha", "rehan", "soham", "rupali",
 ]
 
 SPEAKERS_BY_MODEL: dict[str, list[str]] = {
@@ -88,7 +88,8 @@ SPEAKERS_BY_MODEL: dict[str, list[str]] = {
 
 # Curated tone hints for the most-used voices, so agents can pick sensibly.
 SPEAKER_HINTS: dict[str, str] = {
-    "priya":    "warm friendly female (default), good for product / IVR",
+    "shubh":    "bulbul:v3 default voice (per docs.sarvam.ai)",
+    "priya":    "warm friendly female, good for product / IVR",
     "neha":     "warm female, conversational",
     "pooja":    "warm female, friendly",
     "shreya":   "calm female, news-anchor / narration",
@@ -102,7 +103,6 @@ SPEAKER_HINTS: dict[str, str] = {
     "anand":    "mature male, professional",
     "tanya":    "young energetic female",
     "suhani":   "young energetic female",
-    "niharika": "young energetic female",
 }
 
 
@@ -125,6 +125,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "speech_sample_rate":   "int — 8000|16000|22050|24000|32000|44100|48000",
             "pace":                 "float, 0.3 to 3.0 (default 1)",
             "enable_preprocessing": "bool — normalize numbers/dates/code-mix",
+            "dict_id":              "str (optional) — pronunciation dictionary ID to apply",
         },
         "response": {
             "audios":     "list[str] — base64-encoded WAV per input",
@@ -135,7 +136,8 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "Do NOT send `pitch` or `loudness` — bulbul:v3 rejects the request "
             "outright if either is present, even at a 'neutral' value "
             "(live-confirmed 2026-08-14: \"Pitch and loudness parameters are "
-            "currently not supported for the Bulbul V3 model\")."
+            "currently not supported for the Bulbul V3 model\"). "
+            "Max input length: 2500 characters."
         ),
     },
     "/speech-to-text": {
@@ -161,7 +163,8 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "notes": (
             "Saaras v4 is the latest, recommended model (22 Indic languages + Global/Indian English). "
             "It supports 5 output modes via the `mode` parameter, same as v3. "
-            "For >30s audio, use /speech-to-text/job/init."
+            "`keyterms` (v4 only): up to 50 domain terms, JSON-encoded array form field, "
+            "64 chars max each. For >30s audio, use /speech-to-text/job/v1."
         ),
     },
     "/speech-to-text-translate": {
@@ -180,22 +183,42 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "notes": "DEPRECATED. Migrate to /speech-to-text with model=saaras:v4 and mode=translate.",
     },
-    "/speech-to-text/job/init": {
+    "/speech-to-text/job/v1": {
         "method": "POST",
         "model": "saaras:v4 (recommended, latest)",
         "content_type": "application/json",
         "request_body": {
-            "model":           "str",
-            "with_timestamps": "bool",
-            "language_code":   "str (optional)",
+            "job_parameters": (
+                "object, required — {model, mode, language_code, with_timestamps, "
+                "with_diarization, num_speakers, input_audio_codec, keyterms}"
+            ),
+            "callback": "object (optional) — {url, auth_token} webhook, notified on completion",
         },
         "response": {
-            "job_id":                  "str",
-            "input_storage_path":      "str — Azure Blob SAS URL (PUT audio here)",
-            "output_storage_path":     "str — Azure Blob SAS URL (poll for results)",
-            "storage_container_type":  "str — 'Azure'",
+            "job_id":    "str",
+            "job_state": "str — e.g. 'Accepted'",
         },
-        "notes": "Async batch flow: init -> upload to SAS -> poll /speech-to-text/job/status?job_id=...",
+        "notes": (
+            "Steps 1, 2, 5 below live-confirmed 2026-09-28 against Sarvam's own "
+            "reference pages (initiate/upload/status/download). Step 4 (/start) is "
+            "carried over from this repo's own prior working implementation — "
+            "Sarvam's public docs describe it only via their SDK's job.start() "
+            "abstraction, without publishing the raw REST path, so it wasn't "
+            "independently re-confirmed against docs text on 2026-09-28. "
+            "Full async pipeline, 5 calls: "
+            "1) POST /speech-to-text/job/v1 with {\"job_parameters\": {...}} -> job_id. "
+            "2) POST /speech-to-text/job/v1/upload-files with {job_id, files: [name, ...]} "
+            "-> presigned upload URL(s). "
+            "3) PUT the raw audio bytes to that presigned URL. "
+            "4) POST /speech-to-text/job/v1/{job_id}/start with {job_id, job_parameters}. "
+            "5) Poll GET /speech-to-text/job/v1/{job_id}/status until job_state is terminal "
+            "('Completed'/'PartiallyCompleted'/'Failed'), or fetch fresh presigned output "
+            "URLs any time via POST /speech-to-text/job/v1/download-files with "
+            "{job_id, files: [filename, ...]} — files must be exact output filenames "
+            "(e.g. '0.json'), not just the job_id. "
+            "Up to 20 files per job, audio up to 2 hours; PCM must be 16kHz "
+            "(set job_parameters.input_audio_codec)."
+        ),
     },
     "/translate": {
         "method": "POST",
@@ -257,25 +280,42 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "questions": 'JSON-stringified list of {id, text, type} where type is "boolean" | "enum" | "short answer" | "long answer" | "number". For "enum", also include "options".',
         },
         "response": {"answers": "list[answer]"},
-        "notes": "Each question MUST have id, text, AND type — common gotcha.",
+        "notes": (
+            "PERMANENTLY REMOVED (404 since 2026-08-13, confirmed deliberate via "
+            "Sarvam's own SDK notes, not an outage) — this shape is kept only for "
+            "historical reference. sarvam_tools_text_analytics raises immediately "
+            "rather than calling this. Check 'SarvamParse' (new lightweight beta "
+            "endpoint) on docs.sarvam.ai for a possible replacement."
+        ),
     },
     "/v1/chat/completions": {
         "method": "POST",
-        "model": "sarvam-105b (flagship)",
+        "model": "sarvam-105b (flagship, 128K ctx) | sarvam-105b-conversations (32K ctx, voice/chat-tuned)",
         "content_type": "application/json",
         "request_body": {
-            "model":            "str — sarvam-105b",
-            "messages":         "list[{role, content}]",
-            "temperature":      "float, 0.0 to 2.0",
-            "top_p":            "float, 0.0 to 1.0",
-            "max_tokens":       "int (optional)",
-            "reasoning_effort": "str (optional) — 'low' | 'medium' | 'high'",
-            "stream":           "bool",
+            "model":             "str — 'sarvam-105b' | 'sarvam-105b-conversations'",
+            "messages":          "list[{role, content}]",
+            "temperature":       "float, 0.0 to 2.0",
+            "top_p":             "float, 0.0 to 1.0",
+            "max_tokens":        "int (optional)",
+            "reasoning_effort":  "str (optional) — 'low' | 'medium' (default) | 'high'",
+            "stream":            "bool",
+            "stop":              "list[str] (optional) — up to 4 sequences",
+            "frequency_penalty": "float (optional), -2.0 to 2.0",
+            "presence_penalty":  "float (optional), -2.0 to 2.0",
+            "seed":              "int (optional) — beta, best-effort determinism",
+            "n":                 "int (optional) — number of completions",
+            "tools":             "list[object] (optional) — OpenAI-style function-calling defs",
+            "tool_choice":       "str | object (optional)",
+            "response_format":   "object (optional) — {'type': 'json_object'} or json_schema",
         },
         "response_oai_compatible": True,
         "notes": (
             "OpenAI-compatible. sarvam-30b and sarvam-m were deprecated by "
-            "Sarvam; sarvam-105b is the flagship model on this v1 endpoint. "
+            "Sarvam. Two models live on this v1 endpoint: sarvam-105b (default, "
+            "complex reasoning/coding/agentic tool use) and "
+            "sarvam-105b-conversations (post-trained for real-time dialogue and "
+            "voice agents — same price, smaller 32K context). "
             "GOTCHA (live-confirmed 2026-08-14): sarvam-105b reasons by "
             "default even without reasoning_effort set, and reasoning tokens "
             "count against max_tokens. A small max_tokens (e.g. 20-100) can "
@@ -283,10 +323,11 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "whole budget was consumed by hidden reasoning. Give it real "
             "headroom (300+) or omit max_tokens; reasoning_effort='low' "
             "reduces but does not eliminate this. "
-            "There is also a /v2/chat/completions endpoint that additionally "
-            "serves sarvam-105b-conversations and other (beta, fast-changing) "
-            "open-weight models — not covered here; check docs.sarvam.ai for "
-            "the current v2 model list before relying on a specific one."
+            "There is also a /v2/chat/completions endpoint (glm5.3, gemma4, "
+            "deepseekv4-flash open-weight models) — confirmed to require beta "
+            "whitelisting from Sarvam, so most subscription keys can't call it "
+            "yet; not implemented here for that reason. Ask Sarvam for beta "
+            "access before building against it."
         ),
     },
     "/doc-digitization/job/v1": {
@@ -376,6 +417,7 @@ PRICING: dict[str, dict[str, Any]] = {
     "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
     "sarvam-translate:v1":  {"unit": "per character",         "tier": "billed by character"},
     "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},
+    "sarvam-105b-conversations": {"unit": "per 1M tokens",    "tier": "billed by tokens — same rate as sarvam-105b, per docs.sarvam.ai pricing page."},
     "sarvam-vision":        {"unit": "per page",              "tier": "billed by page"},
 }
 

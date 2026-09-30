@@ -37,23 +37,24 @@ def register(mcp: FastMCP) -> None:
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
             "Generate speech from text (model bulbul:v3). 11 Indic languages.\n\n"
             "Speaker hints (v3 voice roster):\n"
-            "  • `priya` / `neha` / `pooja` — warm friendly female (default `priya`)\n"
+            "  • `priya` / `neha` / `pooja` — warm friendly female\n"
             "  • `aditya` / `rahul` / `kabir` — professional male\n"
+            "  • `shubh` — bulbul:v3 default voice\n"
             "  • `shreya` / `kavya` / `ritu` — calm news-anchor female\n"
             "  • `vijay` / `gokul` / `anand` — mature authoritative male\n"
-            "  • `tanya` / `suhani` / `niharika` — young energetic female\n\n"
+            "  • `tanya` / `suhani` — young energetic female\n\n"
             "The audio file is written under SARVAM_MCP_BASE_PATH (default ~/Desktop)."
         ),
     )
     async def sarvam_tts_speak(
         ctx: Context,
-        text: str = Field(description="The text to synthesize. Up to ~500 chars per call."),
+        text: str = Field(description="The text to synthesize. Max 2500 characters for bulbul:v3."),
         target_language_code: TtsLanguageCode = Field(
             description="Output language. TTS supports 11 Indic languages.",
         ),
         speaker: BulbulSpeaker = Field(
-            default="priya",
-            description="Voice. Default `priya` — use `sarvam_code_speakers` for the full v3 list.",
+            default="shubh",
+            description="Voice. Default `shubh` — use `sarvam_code_speakers` for the full v3 list.",
         ),
         speech_sample_rate: SampleRate = Field(
             default=24000, description="PCM sample rate of the output WAV."
@@ -66,6 +67,13 @@ def register(mcp: FastMCP) -> None:
         model: TtsModel = Field(
             default="bulbul:v3",
             description="`bulbul:v3` (recommended TTS model).",
+        ),
+        dict_id: str | None = Field(
+            default=None,
+            description=(
+                "ID of a pronunciation dictionary (from sarvam_tools_pronunciation_create) "
+                "to apply during synthesis, for custom word pronunciations."
+            ),
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
@@ -81,6 +89,8 @@ def register(mcp: FastMCP) -> None:
             "enable_preprocessing": enable_preprocessing,
             "model": model,
         }
+        if dict_id is not None:
+            body["dict_id"] = dict_id
 
         with measure_tool() as metrics:
             payload, call = await sc.client.post_json(TTS_PATH, json_body=body)
@@ -125,7 +135,7 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         text: str = Field(description="Text to synthesize."),
         target_language_code: TtsLanguageCode = Field(),
-        speaker: BulbulSpeaker = Field(default="priya"),
+        speaker: BulbulSpeaker = Field(default="shubh"),
         pace: float = Field(default=1.0, ge=0.3, le=3.0),
         model: TtsModel = Field(default="bulbul:v3"),
     ) -> dict[str, Any]:

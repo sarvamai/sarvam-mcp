@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any, Literal
 
 from fastmcp import Context, FastMCP
@@ -12,9 +11,8 @@ from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import ready_ctx
 
 LID_PATH = "/text-lid"
-ANALYTICS_PATH = "/text-analytics"
 
-# Live-tested 2026-04-27 — these are the only valid `type` values the API accepts.
+# Kept for reference only — /text-analytics was permanently removed by Sarvam.
 QuestionType = Literal["boolean", "enum", "short answer", "long answer", "number"]
 
 
@@ -47,18 +45,15 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_text_analytics",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "KNOWN ISSUE (as of 2026-08-13): the upstream `/text-analytics` endpoint "
-            "is currently returning 404 Not Found for all requests — confirmed via a "
-            "direct API call outside this tool, so this is not a bug in sarvam-mcp's "
-            "request shape. The endpoint's own docs page is also 404. If this tool "
-            "fails, that's very likely why — don't retry, and check dashboard.sarvam.ai "
-            "or Sarvam support for current availability before relying on it.\n\n"
-            "Run deep analysis on a piece of text by passing a list of typed "
-            "questions. Each question needs `id`, `text`, and `type` "
-            "(`boolean` | `enum` | `short answer` | `long answer` | `number`). "
-            "Returns one answer per question, grounded in the text. Good for "
-            "entity extraction, classification, and structured Q&A without "
-            "writing prompt boilerplate."
+            "PERMANENTLY REMOVED: Sarvam retired the old analytics/parse API family "
+            "(this `/text-analytics` endpoint included) — confirmed via a direct API "
+            "call outside this tool (404, first observed 2026-08-13) and via Sarvam's "
+            "own SDK release notes, which describe the removal as deliberate, not an "
+            "outage. Calling this tool raises immediately instead of making a doomed "
+            "network round trip. There is no direct 1:1 replacement for typed-question "
+            "text analysis; for document/text extraction, check whether "
+            "'SarvamParse' (a new lightweight beta endpoint) fits your use case — "
+            "see docs.sarvam.ai for current availability and request shape."
         ),
     )
     async def sarvam_text_analytics(
@@ -74,27 +69,9 @@ def register(mcp: FastMCP) -> None:
             ),
         ),
     ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        # Validate shape upfront — the API's error message is unhelpful.
-        valid_types = {"boolean", "enum", "short answer", "long answer", "number"}
-        for i, q in enumerate(questions):
-            missing = {"id", "text", "type"} - set(q.keys())
-            if missing:
-                raise ValueError(f"questions[{i}] missing fields: {missing}")
-            if q["type"] not in valid_types:
-                raise ValueError(
-                    f"questions[{i}].type must be one of {sorted(valid_types)}, got {q['type']!r}"
-                )
-
-        # Endpoint is multipart, not JSON. `questions` is a JSON-stringified list.
-        with measure_tool() as metrics:
-            payload, call = await sc.client.post_multipart(
-                ANALYTICS_PATH,
-                data={"text": text, "questions": json.dumps(questions)},
-            )
-            metrics.merge(call)
-        return {
-            "answers": payload.get("answers", []),
-            "raw": payload,
-            "observability": metrics.to_response_block(),
-        }
+        raise RuntimeError(
+            "/text-analytics was permanently removed by Sarvam (not a transient "
+            "outage) — this tool no longer attempts the call. See "
+            "docs.sarvam.ai for 'SarvamParse' (beta), which may cover your use case, "
+            "or dashboard.sarvam.ai for current API availability."
+        )

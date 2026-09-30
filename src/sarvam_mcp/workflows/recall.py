@@ -55,7 +55,11 @@ def register(mcp: FastMCP) -> None:
         max_files: int = Field(default=20, ge=1, le=100),
         llm_model: SarvamLLM = Field(
             default="sarvam-105b",
-            description="`sarvam-105b` (flagship, the only current chat model).",
+            description=(
+                "`sarvam-105b` (default, 128K ctx) — best for summarizing a large "
+                "corpus. `sarvam-105b-conversations` (32K ctx) is tuned for "
+                "voice/chat-agent replies instead, not grounded summarization."
+            ),
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)

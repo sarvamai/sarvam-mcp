@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any, Literal
 
@@ -96,6 +97,14 @@ def register(mcp: FastMCP) -> None:
                 "PCM files are supported only at 16kHz sample rate."
             ),
         ),
+        keyterms: list[str] | None = Field(
+            default=None,
+            description=(
+                "saaras:v4 only. Up to 50 domain-specific terms (max 64 chars each) "
+                "to bias recognition toward — names, jargon, brand terms. Ignored "
+                "by saaras:v3."
+            ),
+        ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         async with resolve_file_input(
@@ -114,6 +123,8 @@ def register(mcp: FastMCP) -> None:
                         data["mode"] = mode
                     if input_audio_codec is not None:
                         data["input_audio_codec"] = input_audio_codec
+                    if keyterms and model == "saaras:v4":
+                        data["keyterms"] = json.dumps(keyterms)
                     payload, call = await sc.client.post_multipart(
                         STT_PATH, data=data, files=files
                     )
@@ -191,7 +202,8 @@ def register(mcp: FastMCP) -> None:
             "Transcribe a long audio file (>30 s) using the batch job pipeline. "
             "Runs the full flow automatically: create job → upload audio to Azure "
             "Blob → start processing → poll until complete → return transcript.\n\n"
-            "Supports diarization, timestamps, and all Saaras v4/v3 output modes."
+            "Supports diarization, timestamps, all Saaras v4/v3 output modes, "
+            "v4-only keyterms, and an optional webhook callback instead of polling."
         ),
     )
     async def sarvam_stt_batch_submit(
@@ -230,6 +242,31 @@ def register(mcp: FastMCP) -> None:
             description="Hint for diarization: expected number of speakers.",
         ),
         model: SttModel = Field(default="saaras:v4"),
+        input_audio_codec: InputAudioCodec | None = Field(
+            default=None,
+            description=(
+                "Required only for PCM files. One of 'pcm_s16le', 'pcm_l16', 'pcm_raw'. "
+                "PCM files are supported only at 16kHz sample rate."
+            ),
+        ),
+        keyterms: list[str] | None = Field(
+            default=None,
+            description=(
+                "saaras:v4 only. Up to 50 domain-specific terms (max 64 chars each) "
+                "to bias recognition toward. Ignored by saaras:v3."
+            ),
+        ),
+        callback_url: str | None = Field(
+            default=None,
+            description=(
+                "Optional webhook URL to notify on job completion, instead of "
+                "polling. Requires callback_auth_token too."
+            ),
+        ),
+        callback_auth_token: str | None = Field(
+            default=None,
+            description="Bearer token Sarvam will send with the callback_url webhook call.",
+        ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         async with resolve_file_input(
@@ -245,13 +282,23 @@ def register(mcp: FastMCP) -> None:
                     "mode": mode,
                     "with_timestamps": with_timestamps,
                     "with_diarization": with_diarization,
+                    "input_audio_codec": input_audio_codec,
                 }
                 if num_speakers is not None:
                     job_params["num_speakers"] = num_speakers
+                if keyterms and model == "saaras:v4":
+                    job_params["keyterms"] = keyterms
                 job_params = {k: v for k, v in job_params.items() if v is not None}
 
+                create_body: dict[str, Any] = {"job_parameters": job_params}
+                if callback_url is not None:
+                    create_body["callback"] = {
+                        "url": callback_url,
+                        "auth_token": callback_auth_token,
+                    }
+
                 create_resp, call = await sc.client.post_json(
-                    STT_JOB_BASE, json_body={"job_parameters": job_params}
+                    STT_JOB_BASE, json_body=create_body
                 )
                 metrics.merge(call)
                 job_id = create_resp["job_id"]
@@ -323,17 +370,17 @@ def register(mcp: FastMCP) -> None:
                 result = status_resp.get("result") or {}
                 transcript = result.get("transcript") or status_resp.get("transcript")
 
-                if not transcript:
-                    download_urls = status_resp.get("download_urls", {})
-                    if download_urls:
-                        await ctx.info("Downloading transcript…")
-                        dl_url = next(iter(download_urls.values()))["file_url"]
-                        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as dl:
-                            dl_resp = await dl.get(dl_url)
-                        if dl_resp.is_success:
-                            dl_body = dl_resp.json()
-                            transcript = dl_body.get("transcript", "")
-                            result = dl_body
+                if not transcript and status_resp.get("job_state") in (
+                    "Completed",
+                    "PartiallyCompleted",
+                ):
+                    await ctx.info("Downloading transcript…")
+                    dl_body, call = await _fetch_first_output(sc, job_id, status_resp)
+                    if call is not None:
+                        metrics.merge(call)
+                    if dl_body:
+                        transcript = dl_body.get("transcript", "")
+                        result = dl_body
 
         return {
             "job_id": job_id,
@@ -364,15 +411,88 @@ def register(mcp: FastMCP) -> None:
             )
             metrics.merge(call)
 
-        result = payload.get("result") or {}
+            result = payload.get("result") or {}
+            transcript = result.get("transcript") or payload.get("transcript")
+            if not transcript and payload.get("job_state") in (
+                "Completed",
+                "PartiallyCompleted",
+            ):
+                dl_body, dl_call = await _fetch_first_output(sc, job_id, payload)
+                if dl_call is not None:
+                    metrics.merge(dl_call)
+                transcript = (dl_body or {}).get("transcript")
+
         return {
             "job_id": job_id,
             "job_state": payload.get("job_state"),
-            "transcript": result.get("transcript") or payload.get("transcript"),
-            "download_urls": payload.get("download_urls"),
+            "transcript": transcript,
+            "output_files": _output_filenames(payload),
             "raw": payload,
             "observability": metrics.to_response_block(),
         }
+
+    @mcp.tool(
+        name="sarvam_tools_stt_batch_download",
+        description=(
+            "Runtime tool — calls Sarvam API now.\n\n"
+            "Get fresh presigned download URLs for specific output files of a "
+            "completed batch STT job. Use this if the URLs from "
+            "sarvam_tools_stt_batch_status have expired. Requires the exact output "
+            "filenames (e.g. '0.json') — get these from a prior "
+            "sarvam_tools_stt_batch_status call's `output_files`."
+        ),
+    )
+    async def sarvam_stt_batch_download(
+        ctx: Context,
+        job_id: str = Field(description="The job_id returned by sarvam_tools_stt_batch_submit."),
+        files: list[str] = Field(
+            description=(
+                "Exact output filenames to fetch fresh URLs for, e.g. ['0.json']. "
+                "Get these from sarvam_tools_stt_batch_status's `output_files`."
+            ),
+        ),
+    ) -> dict[str, Any]:
+        sc = await ready_ctx(ctx)
+        with measure_tool() as metrics:
+            payload, call = await sc.client.post_json(
+                STT_JOB_DOWNLOAD, json_body={"job_id": job_id, "files": files}
+            )
+            metrics.merge(call)
+
+        return {
+            "job_id": job_id,
+            "job_state": payload.get("job_state"),
+            "download_urls": payload.get("download_urls", payload),
+            "observability": metrics.to_response_block(),
+        }
+
+
+def _output_filenames(status: dict[str, Any]) -> list[str]:
+    """Output file names listed under ``job_details[].outputs[]`` of a status payload."""
+    return [
+        o["file_name"]
+        for detail in status.get("job_details") or []
+        for o in detail.get("outputs") or []
+        if o.get("file_name")
+    ]
+
+
+async def _fetch_first_output(
+    sc: Any, job_id: str, status: dict[str, Any]
+) -> tuple[dict[str, Any] | None, Any | None]:
+    """Resolve a fresh presigned URL for the job's first output file and load its JSON."""
+    files = _output_filenames(status)[:1]
+    if not files:
+        return None, None
+    resp, call = await sc.client.post_json(
+        STT_JOB_DOWNLOAD, json_body={"job_id": job_id, "files": files}
+    )
+    url = (resp.get("download_urls") or {}).get(files[0], {}).get("file_url")
+    if not url:
+        return None, call
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as dl:
+        dl_resp = await dl.get(url)
+    return (dl_resp.json() if dl_resp.is_success else None), call
 
 
 def _guess_audio_mime(path: Path) -> str:

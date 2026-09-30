@@ -173,11 +173,11 @@ def _recommend(task: str) -> dict[str, Any]:
         return _result(
             model="bulbul:v3",
             endpoint="/text-to-speech",
-            why="Indic text → speech. Current TTS stack with 38 voices on v3.",
+            why="Indic text → speech. Current TTS stack with 37 voices on v3.",
             language_code=detected_lang or "hi-IN",
             snippet_key=("tts", "python"),
             extras={
-                "default_speaker": "priya",
+                "default_speaker": "shubh",
                 "tip_speakers":    "Call sarvam_code_speakers('bulbul:v3') for the full voice list with tone hints.",
             },
         )
@@ -213,11 +213,29 @@ def _recommend(task: str) -> dict[str, Any]:
         )
 
     # ---- chat / LLM / agent
-    if re.search(r"\b(chat|chatbot|llm|agent|generate text|reply|conversation|reasoning|reasoning agent)\b", t):
+    if re.search(r"\b(voice ?agent|voice ?bot|real.?time (dialogue|chat)|chatbot|conversational)\b", t):
+        return _result(
+            model="sarvam-105b-conversations",
+            endpoint="/v1/chat/completions",
+            why=(
+                "sarvam-105b-conversations — post-trained for real-time dialogue "
+                "and voice agents, more natural/colloquial Indic replies, 32K "
+                "context. Same price as sarvam-105b; switch to sarvam-105b only "
+                "if you need deep reasoning, coding, or a longer context window."
+            ),
+            language_code=detected_lang,
+            snippet_key=("llm", "python"),
+        )
+    if re.search(r"\b(chat|llm|agent|generate text|reply|conversation|reasoning|reasoning agent)\b", t):
         return _result(
             model="sarvam-105b",
             endpoint="/v1/chat/completions",
-            why="Sarvam-105B — flagship model, best reasoning + tool use across Indic languages. The sole current chat model (sarvam-30b was deprecated).",
+            why=(
+                "Sarvam-105B — flagship model, best reasoning + tool use across "
+                "Indic languages, 128K context (sarvam-30b/sarvam-m were "
+                "deprecated). For a low-latency voice/chat-agent loop instead, "
+                "prefer sarvam-105b-conversations (32K ctx, same price)."
+            ),
             language_code=detected_lang,
             snippet_key=("llm", "python"),
         )
@@ -282,7 +300,7 @@ def _result(
 # ---- request validation ---------------------------------------------------
 
 _VALID_TTS_MODELS = {"bulbul:v3"}
-_VALID_LLM_MODELS = {"sarvam-105b"}
+_VALID_LLM_MODELS = {"sarvam-105b", "sarvam-105b-conversations"}
 _VALID_TRANSLATE_MODELS = {"mayura:v1", "sarvam-translate:v1"}
 _VALID_STT_MODELS = {"saaras:v4", "saaras:v3"}
 _VALID_STT_MODES = {"transcribe", "translate", "verbatim", "translit", "codemix"}
@@ -407,7 +425,7 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
         ):
             issues.append(_warn(
                 "max_tokens",
-                f"sarvam-105b reasons by default and reasoning tokens count "
+                f"The sarvam-105b family reasons by default and reasoning tokens count "
                 f"against max_tokens — {max_tokens} can easily be consumed "
                 "entirely by hidden reasoning, returning empty content with "
                 "finish_reason='length'.",

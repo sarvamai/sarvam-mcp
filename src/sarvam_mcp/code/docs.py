@@ -27,7 +27,7 @@ ApiName = Literal[
 EndpointPath = Literal[
     "/speech-to-text",
     "/speech-to-text-translate",
-    "/speech-to-text/job/init",
+    "/speech-to-text/job/v1",
     "/text-to-speech",
     "/translate",
     "/transliterate",
@@ -94,7 +94,7 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Build-time tool — helps write code that uses Sarvam. For runtime actions, use sarvam_tools_* instead.\n\n"
             "List TTS speakers compatible with a given model tag. The v3 roster "
-            "has 38 voices. Returns each speaker with a brief tone hint where available."
+            "has 37 voices. Returns each speaker with a brief tone hint where available."
         ),
     )
     async def sarvam_code_speakers(
