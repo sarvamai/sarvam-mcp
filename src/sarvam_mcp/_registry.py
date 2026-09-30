@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sarvam_mcp.audio import AudioSink
 from sarvam_mcp.config import Config
@@ -21,3 +21,4 @@ class ServerContext:
     client: SarvamClient
     audio_sink: AudioSink
     update_info: UpdateInfo | None = field(default=None)
+    memory_store: Any | None = field(default=None)

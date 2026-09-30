@@ -12,6 +12,7 @@ OutputMode = Literal["files", "resources", "both"]
 DEFAULT_BASE_URL = "https://api.sarvam.ai"
 DEFAULT_BASE_PATH = "~/Desktop"
 DEFAULT_OUTPUT_MODE: OutputMode = "files"
+DEFAULT_COGNICORE_DB_PATH = "~/.cognicore/memory.json"
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class Config:
     base_url: str = DEFAULT_BASE_URL
     base_path: Path = field(default_factory=lambda: Path(DEFAULT_BASE_PATH).expanduser())
     output_mode: OutputMode = DEFAULT_OUTPUT_MODE
+    cognicore_db_path: str = DEFAULT_COGNICORE_DB_PATH
 
     @classmethod
     def load(cls) -> Config:
@@ -32,6 +34,7 @@ class Config:
         base_url = os.environ.get("SARVAM_API_BASE_URL", DEFAULT_BASE_URL)
         base_path_str = os.environ.get("SARVAM_MCP_BASE_PATH", DEFAULT_BASE_PATH)
         mode_str = os.environ.get("SARVAM_AUDIO_OUTPUT_MODE", DEFAULT_OUTPUT_MODE).lower()
+        cognicore_db_path = os.environ.get("COGNICORE_DB_PATH", DEFAULT_COGNICORE_DB_PATH)
 
         if mode_str not in ("files", "resources", "both"):
             raise ValueError(
@@ -46,6 +49,7 @@ class Config:
             base_url=base_url.rstrip("/"),
             base_path=base_path,
             output_mode=mode_str,  # type: ignore[arg-type]
+            cognicore_db_path=cognicore_db_path,
         )
 
 
