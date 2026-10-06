@@ -8,7 +8,7 @@ and what's documented at docs.sarvam.ai.
 Update cadence: bump these any time Sarvam adds a model/speaker/language
 or changes pricing. CI will surface a diff in PR review.
 
-Last verified live against api.sarvam.ai: 2026-10-06.
+Last verified live against api.sarvam.ai: 2026-09-28.
 """
 
 from __future__ import annotations
@@ -71,8 +71,7 @@ LANGUAGES_BY_API: dict[str, list[dict[str, str]]] = {
 
 
 # ---------------------------------------------------------------------------
-# TTS speakers per model. Speaker IDs are model-specific: the API rejects a
-# v3 name on v4-flash (and vice versa) with a 400 that lists the valid set.
+# TTS speakers for bulbul:v3.
 # ---------------------------------------------------------------------------
 
 V3_SPEAKERS = [
@@ -83,93 +82,8 @@ V3_SPEAKERS = [
     "mohit", "kavitha", "rehan", "soham", "rupali",
 ]
 
-# bulbul:v4-flash persona IDs, `<voice>_<lang>_<style>` (222 IDs, matching
-# docs.sarvam.ai; re-verified against the live API on 2026-10-06 after Sarvam
-# renamed bappa_bn_conversation -> arnab_bn_conversation and vetri_ta_* ->
-# aravind_ta_*). The live API also lists 2 Assamese (`as`) personas; they
-# are intentionally left out — Assamese voices require contacting Sarvam.
-V4_FLASH_SPEAKERS = [
-    "aayan_hi_conversational", "amit_hi_conversational",
-    "ashutosh_hi_conversational", "kabir_hi_conversational",
-    "kavya_hi_conversational", "manan_hi_conversational",
-    "rahul_hi_conversational", "sumit_hi_conversational",
-    "arnab_bn_conversation", "roopa_bn_conversational", "aditi_en_stories",
-    "aparna_en_companion", "aparna_en_edtech", "ashwin_en_sports",
-    "ashwin_en_sports_energetic", "chandrika_en_stories", "dev_en_recovery",
-    "dev_en_conversational", "deven_en_conversation", "ishita_en_customer",
-    "ishita_en_medical", "ishita_en_numbers", "ishita_en_social",
-    "ishita_en_stories", "kalpit_en_edtech", "nachiket_en_ads",
-    "neha_en_customer", "neha_en_latenight", "nupur_en_kids", "ojas_en_social",
-    "ritu_en_edtech", "ritu_en_latenight", "ritu_en_medical", "ritu_en_reels",
-    "rohan_en_recovery", "roopa_en_conversational", "rustom_en_suspense",
-    "sanchita_en_companion", "sanchita_en_insurance", "sanchita_en_recovery",
-    "sanchita_en_market", "sanchita_en_social", "shabana_en_edtech",
-    "shalini_en_companion", "shalini_en_customer", "shubh_en_narration",
-    "shubh_en_numbers", "shubh_en_ads", "shubh_en_recovery",
-    "shubh_en_audiobook", "shubh_en_narration_gentle", "shubh_en_sports",
-    "simran_en_narration", "simran_en_automobile", "simran_en_conversation",
-    "simran_en_customer", "simran_en_edtech", "simran_en_edtech_bot",
-    "simran_en_sales", "simran_en_recovery", "simran_en_ads",
-    "simran_en_therapist", "sunny_en_social", "varun_en_ads",
-    "varun_en_suspense", "zarina_en_conversation", "ishita_enhi_companion",
-    "ishita_enhi_customer", "ishita_enhi_customer_expressive",
-    "sanchita_enhi_companion", "shalini_enhi_companion",
-    "shalini_enhi_customer", "shubh_enhi_companion", "shubh_enhi_ads",
-    "shubh_enhi_banking", "simran_enhi_companion", "simran_enhi_customer",
-    "simran_enhi_banking_expressive", "sunny_enhi_customer",
-    "bhavik_gu_conversation", "pooja_gu_conversational", "pooja_gu_customer",
-    "aditya_hi_conversational", "aditya_hi_sales", "anand_hi_documentary",
-    "anand_hi_news", "aparna_hi_customer", "aparna_hi_kyc",
-    "ashok_hi_character", "ashok_hi_news", "chhavi_hi_kids", "ishita_hi_ads",
-    "ishita_hi_edtech", "ishita_hi_banking", "ishita_hi_ads_informal",
-    "ishita_hi_devotional", "ishita_hi_numbers", "ishita_hi_social",
-    "kunal_hi_kids", "mahesh_hi_documentary", "mani_hi_devotional",
-    "mani_hi_conversational", "mohit_hi_conversational",
-    "nachiket_hi_devotional", "priya_hi_recovery", "ratan_hi_latenight",
-    "ratan_hi_customer_expressive", "ratan_hi_documentary",
-    "ratan_hi_devotional", "ratan_hi_recovery", "ratan_hi_social",
-    "ratan_hi_sports", "ratan_hi_latenight_warm", "rehan_hi_social",
-    "ritu_hi_customer_utility", "ritu_hi_kids", "ritu_hi_conversation",
-    "ritu_hi_customer", "ritu_hi_edtech", "ritu_hi_ads_formal",
-    "ritu_hi_banking", "ritu_hi_ads_informal", "ritu_hi_insurance",
-    "ritu_hi_edtech_bot", "ritu_hi_medical", "ritu_hi_sales", "ritu_hi_reels",
-    "ritu_hi_social", "ritu_hi_customer_warm", "ritu_hi_social_lively",
-    "roopa_hi_companion", "roopa_hi_narration", "roopa_hi_recovery",
-    "roopa_hi_market", "roopa_hi_conversational", "sanchita_hi_assistant",
-    "sanchita_hi_edtech", "sanchita_hi_banking", "sanchita_hi_feedback",
-    "sanchita_hi_ads_formal", "sanchita_hi_ads_informal",
-    "sanchita_hi_interview", "sanchita_hi_romantic", "sanchita_hi_market",
-    "sanchita_hi_social", "sanchita_hi_kyc", "sarika_hi_conversation",
-    "shalini_hi_companion", "shalini_hi_social", "shreya_hi_conversational",
-    "shreya_hi_news", "shruti_hi_edtech", "shubh_hi_customer", "shubh_hi_ecomm",
-    "shubh_hi_stories_mixed", "shubh_hi_devotional", "shubh_hi_ads",
-    "shubh_hi_recovery", "shubh_hi_stories_dramatic", "simran_hi_assistant",
-    "simran_hi_narration", "simran_hi_automobile", "simran_hi_conversation",
-    "simran_hi_news_breaking", "simran_hi_social_energetic",
-    "simran_hi_social_excited", "simran_hi_latenight", "simran_hi_news",
-    "simran_hi_recovery", "simran_hi_sales", "suchitra_hi_ecomm",
-    "suhani_hi_social", "sunny_hi_ads", "sunny_hi_reels",
-    "tarun_hi_conversational", "tarun_hi_sales", "chaitra_hi_customer",
-    "shilpa_hi_narration", "tanya_hi_narration", "chaitra_kn_conversation",
-    "chaitra_kn_narration", "chetan_kn_conversation", "suchitra_kn_narration",
-    "ishita_mr_conversational", "mrunal_mr_narration", "neha_mr_narration",
-    "nilesh_mr_conversation", "ritu_mr_insurance", "ritu_mr_narration",
-    "rupali_mr_stories", "soham_mr_narration", "anand_pa_conversation",
-    "anand_pa_customer", "harpreet_pa_narration", "jaspal_pa_banking",
-    "gokul_ta_narration", "aravind_ta_ads", "aravind_ta_suspense",
-    "vijay_ta_narration", "kavitha_te_conversation", "kavitha_te_narration",
-    "pooja_te_conversation", "tarun_te_narration", "amelia_en_conversational",
-    "sophia_en_conversational", "bimal_bn_suspense", "girish_en_documentary",
-    "girish_en_devotional", "payal_en_edtech", "sarang_en_narration",
-    "aarti_hi_customer", "advait_hi_character", "aryaman_hi_ads",
-    "chirag_hi_social", "girish_hi_devotional", "mukul_hi_ads",
-    "mukul_hi_suspense", "suman_hi_companion", "vaibhav_hi_social",
-    "vandana_hi_ecomm", "vipul_hi_social", "mukul_mr_stories",
-]
-
 SPEAKERS_BY_MODEL: dict[str, list[str]] = {
     "bulbul:v3": V3_SPEAKERS,
-    "bulbul:v4-flash": V4_FLASH_SPEAKERS,
 }
 
 # Curated tone hints for the most-used voices, so agents can pick sensibly.
@@ -189,15 +103,6 @@ SPEAKER_HINTS: dict[str, str] = {
     "anand":    "mature male, professional",
     "tanya":    "young energetic female",
     "suhani":   "young energetic female",
-    # bulbul:v4-flash personas — the style suffix is the tone.
-    "shubh_enhi_ads":     "bulbul:v4-flash default; English-Hindi code-mixed, ad-read style",
-    "simran_en_customer": "English (en-IN) customer-care female",
-    "simran_en_sales":    "English (en-IN) sales female",
-    "aparna_hi_customer": "Hindi customer-care female",
-    "shubh_hi_customer":  "Hindi customer-care male",
-    "ritu_hi_customer":   "Hindi customer-care female",
-    "aparna_en_edtech":   "English (en-IN) edtech female",
-    "sunny_en_social":    "English (en-IN) social-media male",
 }
 
 
@@ -209,20 +114,16 @@ SPEAKER_HINTS: dict[str, str] = {
 API_REFERENCE: dict[str, dict[str, Any]] = {
     "/text-to-speech": {
         "method": "POST",
-        "model": "bulbul:v3 (default) | bulbul:v4-flash (low-latency, persona speakers)",
+        "model": "bulbul:v3 (latest)",
         "content_type": "application/json",
         "auth_header": "api-subscription-key",
         "request_body": {
-            "text":                 "str, required — text to synthesize, max 2500 characters",
-            "inputs":               "list[str] (legacy alternative to `text`) — each item max 500 characters; prefer `text`",
+            "inputs":               "list[str], required — texts to synthesize",
             "target_language_code": "str, required — one of TTS-supported codes",
             "speaker":              "str, required — must be compatible with chosen model",
-            "model":                "str — 'bulbul:v3' (default) | 'bulbul:v4-flash'",
+            "model":                "str — bulbul:v3 default",
             "speech_sample_rate":   "int — 8000|16000|22050|24000|32000|44100|48000",
-            "output_audio_codec":   "str (optional) — wav (default) | mp3 | aac | flac | linear16 | mulaw | opus (opus needs 8000/12000/16000/24000/48000 Hz)",
-            "pace":                 "float, 0.5 to 2.0 (default 1)",
-            "pitch":                "float (optional), -0.5 to 0.5",
-            "loudness":             "float (optional), 0.1 to 2.5",
+            "pace":                 "float, 0.3 to 3.0 (default 1)",
             "enable_preprocessing": "bool — normalize numbers/dates/code-mix",
             "dict_id":              "str (optional) — pronunciation dictionary ID to apply",
         },
@@ -232,16 +133,11 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "notes": (
             "Pick a speaker compatible with your model — see sarvam_code_speakers. "
-            "bulbul:v3 uses short names ('shubh', 'priya'); bulbul:v4-flash uses "
-            "persona IDs ('simran_en_customer', default 'shubh_enhi_ads') and "
-            "rejects v3 names. Both models accept `pitch`, `loudness` and `pace` "
-            "(live-confirmed 2026-10-06; the earlier 'v3 rejects pitch/loudness' "
-            "behavior is gone) and out-of-range values return 400. "
-            "`temperature` is silently ignored on v4-flash. Max input length: "
-            "2500 characters via `text` (the legacy `inputs` array caps each item at "
-            "500 — live-confirmed 2026-10-06). v4-flash: no SSML, native-script text recommended "
-            "(romanised Indic degrades quality); also served by HTTP streaming "
-            "(POST /text-to-speech/stream) and the WebSocket below."
+            "Do NOT send `pitch` or `loudness` — bulbul:v3 rejects the request "
+            "outright if either is present, even at a 'neutral' value "
+            "(live-confirmed 2026-08-14: \"Pitch and loudness parameters are "
+            "currently not supported for the Bulbul V3 model\"). "
+            "Max input length: 2500 characters."
         ),
     },
     "/speech-to-text": {
@@ -482,14 +378,14 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
     },
     "/text-to-speech/ws": {
         "method": "WebSocket",
-        "model": "bulbul:v3 | bulbul:v4-flash",
+        "model": "bulbul:v3",
         "notes": (
             "Live-confirmed 2026-08-14. Connect to "
-            "wss://api.sarvam.ai/text-to-speech/ws?model=bulbul:v3 (or bulbul:v4-flash) with header "
+            "wss://api.sarvam.ai/text-to-speech/ws?model=bulbul:v3 with header "
             "api-subscription-key: <key>. model is a URL query param, not a "
             "body/config field. Message sequence: send "
             '{"type":"config","data":{"speaker","language_code","pace",'
-            '"pitch","loudness","output_audio_codec","output_audio_bitrate","min_buffer_size",'
+            '"output_audio_codec","output_audio_bitrate","min_buffer_size",'
             '"max_chunk_length"}} first, then one or more '
             '{"type":"text","data":{"text":...}}, then {"type":"flush"} to force '
             "processing. Audio arrives as TEXT (JSON) frames, not binary: "
@@ -518,7 +414,6 @@ PRICING: dict[str, dict[str, Any]] = {
     "saaras:v3-realtime":   {"unit": "per minute of audio",   "tier": "billed by minute"},
     "saaras:v2.5":          {"unit": "per minute of audio",   "tier": "billed by minute (legacy, deprecated soon)"},
     "bulbul:v3":            {"unit": "per character",         "tier": "billed by character"},
-    "bulbul:v4-flash":      {"unit": "per character",         "tier": "billed by character (assumed same unit as bulbul:v3 — docs.sarvam.ai doesn't publish a v4-flash rate yet; confirm on dashboard.sarvam.ai)"},
     "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
     "sarvam-translate:v1":  {"unit": "per character",         "tier": "billed by character"},
     "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},

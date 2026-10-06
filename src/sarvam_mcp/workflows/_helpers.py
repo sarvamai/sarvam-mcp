@@ -15,7 +15,7 @@ from typing import Any
 from sarvam_mcp._registry import ServerContext
 from sarvam_mcp.audio import StoredAudio
 from sarvam_mcp.observability import CallMetrics, ToolMetrics
-from sarvam_mcp.tools._common import SarvamLLM, resolve_tts_speaker
+from sarvam_mcp.tools._common import SarvamLLM
 
 
 def _audio_mime(path: Path) -> str:
@@ -87,7 +87,7 @@ async def tts_synthesize(
     text: str,
     *,
     target_language_code: str,
-    speaker: str | None = None,
+    speaker: str = "shubh",
     speech_sample_rate: int = 24000,
     model: str = "bulbul:v3",
     filename_prefix: str = "sv-out",
@@ -97,9 +97,9 @@ async def tts_synthesize(
     body, call = await sc.client.post_json(
         "/text-to-speech",
         json_body={
-            "text": text,
+            "inputs": [text],
             "target_language_code": target_language_code,
-            "speaker": resolve_tts_speaker(model, speaker),
+            "speaker": speaker,
             "speech_sample_rate": speech_sample_rate,
             "model": model,
             "enable_preprocessing": True,
