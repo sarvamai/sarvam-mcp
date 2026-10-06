@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sarvam-mcp"
-version = "0.2.10"
+version = "0.2.11"
 description = "Official Sarvam AI MCP server — STT, TTS, Translate, Transliterate, LLM, Vision OCR for Indic languages"
 readme = "README.md"
 requires-python = ">=3.11"
