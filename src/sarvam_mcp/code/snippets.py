@@ -173,12 +173,18 @@ def _recommend(task: str) -> dict[str, Any]:
         return _result(
             model="bulbul:v3",
             endpoint="/text-to-speech",
-            why="Indic text → speech. Current TTS stack with 37 voices on v3.",
+            why=(
+                "Indic text → speech. bulbul:v3 (37 short-name voices) is the "
+                "default; for low-latency voice agents consider bulbul:v4-flash "
+                "(222 persona speakers like 'simran_en_customer' — speaker IDs "
+                "are model-specific)."
+            ),
             language_code=detected_lang or "hi-IN",
             snippet_key=("tts", "python"),
             extras={
                 "default_speaker": "shubh",
-                "tip_speakers":    "Call sarvam_code_speakers('bulbul:v3') for the full voice list with tone hints.",
+                "tip_speakers":    "Call sarvam_code_speakers('bulbul:v3') or sarvam_code_speakers('bulbul:v4-flash') for the voice list with tone hints.",
+                "v4_flash_example": {"model": "bulbul:v4-flash", "speaker": "simran_en_customer", "target_language_code": "en-IN"},
             },
         )
 
@@ -299,7 +305,7 @@ def _result(
 
 # ---- request validation ---------------------------------------------------
 
-_VALID_TTS_MODELS = {"bulbul:v3"}
+_VALID_TTS_MODELS = {"bulbul:v3", "bulbul:v4-flash"}
 _VALID_LLM_MODELS = {"sarvam-105b", "sarvam-105b-conversations"}
 _VALID_TRANSLATE_MODELS = {"mayura:v1", "sarvam-translate:v1"}
 _VALID_STT_MODELS = {"saaras:v4", "saaras:v3"}
@@ -321,8 +327,19 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
 
     if endpoint == "/text-to-speech":
-        if "inputs" not in body or not isinstance(body.get("inputs"), list):
-            issues.append(_err("inputs", "Required: list of strings to synthesize."))
+        text, inputs = body.get("text"), body.get("inputs")
+        if isinstance(text, str):
+            if len(text) > 2500:
+                issues.append(_err("text", f"{len(text)} characters; max is 2500.",
+                                   "Split the text at sentence boundaries."))
+        elif isinstance(inputs, list):
+            if any(isinstance(i, str) and len(i) > 500 for i in inputs):
+                issues.append(_err(
+                    "inputs", "Each `inputs` item is limited to 500 characters.",
+                    "Use `text` (max 2500 characters) instead of the legacy `inputs` array.",
+                ))
+        else:
+            issues.append(_err("text", "Required: `text`, the string to synthesize (max 2500 characters)."))
         if not body.get("target_language_code"):
             issues.append(_err("target_language_code", "Required."))
         elif body["target_language_code"] not in _TTS_LANG_CODES:
@@ -346,12 +363,12 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
             8000, 16000, 22050, 24000, 32000, 44100, 48000
         ):
             issues.append(_err("speech_sample_rate", "Invalid sample rate."))
-        for f in ("pitch", "loudness"):
-            if f in body:
+        for f, lo, hi in (("pace", 0.5, 2.0), ("pitch", -0.5, 0.5), ("loudness", 0.1, 2.5)):
+            v = body.get(f)
+            if isinstance(v, (int, float)) and not lo <= v <= hi:
                 issues.append(_err(
-                    f, f"bulbul:v3 rejects the request outright if `{f}` is present "
-                    "at all, even at a neutral/default value.",
-                    f"Remove `{f}` from the body entirely.",
+                    f, f"`{f}` must be between {lo} and {hi} for bulbul:v3 / v4-flash.",
+                    f"Use a value in [{lo}, {hi}].",
                 ))
 
     elif endpoint == "/speech-to-text":

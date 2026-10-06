@@ -12,7 +12,12 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import BulbulSpeaker, TtsLanguageCode, ready_ctx
+from sarvam_mcp.tools._common import (
+    TtsLanguageCode,
+    TtsModel,
+    ready_ctx,
+    resolve_tts_speaker,
+)
 
 TTS_PATH = "/text-to-speech"
 TTS_STREAM_PATH = "/text-to-speech/ws"  # current WebSocket path — live-confirmed 2026-08-14.
@@ -27,7 +32,6 @@ WS_IDLE_TIMEOUT_SECONDS = 8.0
 WS_MAX_STREAM_SECONDS = 60.0
 
 SampleRate = Literal[8000, 16000, 22050, 24000, 32000, 44100, 48000]
-TtsModel = Literal["bulbul:v3"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -35,38 +39,56 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_tts_speak",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Generate speech from text (model bulbul:v3). 11 Indic languages.\n\n"
-            "Speaker hints (v3 voice roster):\n"
-            "  • `priya` / `neha` / `pooja` — warm friendly female\n"
-            "  • `aditya` / `rahul` / `kabir` — professional male\n"
-            "  • `shubh` — bulbul:v3 default voice\n"
-            "  • `shreya` / `kavya` / `ritu` — calm news-anchor female\n"
-            "  • `vijay` / `gokul` / `anand` — mature authoritative male\n"
-            "  • `tanya` / `suhani` — young energetic female\n\n"
+            "Generate speech from text with bulbul:v3 (default) or bulbul:v4-flash. "
+            "11 Indic languages.\n\n"
+            "Speakers are model-specific:\n"
+            "  • bulbul:v3 — short names, default `shubh`. `priya` / `neha` / `pooja` "
+            "(warm female), `aditya` / `rahul` / `kabir` (professional male), "
+            "`shreya` / `kavya` / `ritu` (calm female), `vijay` / `gokul` / `anand` "
+            "(mature male), `tanya` / `suhani` (young female).\n"
+            "  • bulbul:v4-flash — persona IDs `<voice>_<lang>_<style>`, default "
+            "`shubh_enhi_ads`, e.g. `simran_en_customer`, `aparna_hi_customer`, "
+            "`ritu_hi_customer`. 222 voice IDs (Assamese voices are not included — contact "
+            "Sarvam for access); use sarvam_code_speakers('bulbul:v4-flash') for the full list. "
+            "Native-script text works best (romanised Indic degrades quality).\n\n"
             "The audio file is written under SARVAM_MCP_BASE_PATH (default ~/Desktop)."
         ),
     )
     async def sarvam_tts_speak(
         ctx: Context,
-        text: str = Field(description="The text to synthesize. Max 2500 characters for bulbul:v3."),
+        text: str = Field(description="The text to synthesize. Max 2500 characters."),
         target_language_code: TtsLanguageCode = Field(
             description="Output language. TTS supports 11 Indic languages.",
         ),
-        speaker: BulbulSpeaker = Field(
-            default="shubh",
-            description="Voice. Default `shubh` — use `sarvam_code_speakers` for the full v3 list.",
+        speaker: str | None = Field(
+            default=None,
+            description=(
+                "Voice. Defaults to `shubh` (bulbul:v3) or `shubh_enhi_ads` "
+                "(bulbul:v4-flash). Must match the model — see sarvam_code_speakers."
+            ),
         ),
         speech_sample_rate: SampleRate = Field(
             default=24000, description="PCM sample rate of the output WAV."
         ),
-        pace: float = Field(default=1.0, ge=0.3, le=3.0),
+        pace: float = Field(default=1.0, ge=0.5, le=2.0),
+        pitch: float | None = Field(
+            default=None, ge=-0.5, le=0.5,
+            description="Pitch shift, -0.5 to 0.5. Omit for the voice's natural pitch.",
+        ),
+        loudness: float | None = Field(
+            default=None, ge=0.1, le=2.5,
+            description="Output gain, 0.1 to 2.5. Omit for default loudness.",
+        ),
         enable_preprocessing: bool = Field(
             default=True,
             description="Normalize numbers/dates/code-mixed segments before synthesis.",
         ),
         model: TtsModel = Field(
             default="bulbul:v3",
-            description="`bulbul:v3` (recommended TTS model).",
+            description=(
+                "`bulbul:v3` (default) or `bulbul:v4-flash` (low-latency, persona "
+                "speakers like `simran_en_customer`)."
+            ),
         ),
         dict_id: str | None = Field(
             default=None,
@@ -77,11 +99,9 @@ def register(mcp: FastMCP) -> None:
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
-        # bulbul:v3 rejects requests that include pitch/loudness at all
-        # ("Pitch and loudness parameters are currently not supported for
-        # the Bulbul V3 model") — live-confirmed 2026-08-13. Don't send them.
+        speaker = resolve_tts_speaker(model, speaker)
         body: dict[str, Any] = {
-            "inputs": [text],
+            "text": text,
             "target_language_code": target_language_code,
             "speaker": speaker,
             "speech_sample_rate": speech_sample_rate,
@@ -89,6 +109,13 @@ def register(mcp: FastMCP) -> None:
             "enable_preprocessing": enable_preprocessing,
             "model": model,
         }
+        # pitch/loudness are accepted by both models (live-confirmed 2026-10-06;
+        # the old v3 rejection from 2026-08-13 no longer applies). Only send
+        # them when set so the voice keeps its natural defaults.
+        if pitch is not None:
+            body["pitch"] = pitch
+        if loudness is not None:
+            body["loudness"] = loudness
         if dict_id is not None:
             body["dict_id"] = dict_id
 
@@ -114,6 +141,7 @@ def register(mcp: FastMCP) -> None:
             "mime_type": stored.mime_type,
             "size_bytes": stored.size_bytes,
             "speaker": speaker,
+            "model": model,
             "language": target_language_code,
             "observability": metrics.to_response_block(),
         }
@@ -135,11 +163,17 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         text: str = Field(description="Text to synthesize."),
         target_language_code: TtsLanguageCode = Field(),
-        speaker: BulbulSpeaker = Field(default="shubh"),
-        pace: float = Field(default=1.0, ge=0.3, le=3.0),
+        speaker: str | None = Field(
+            default=None,
+            description="Voice; defaults per model (`shubh` / `shubh_enhi_ads`). Must match the model.",
+        ),
+        pace: float = Field(default=1.0, ge=0.5, le=2.0),
+        pitch: float | None = Field(default=None, ge=-0.5, le=0.5),
+        loudness: float | None = Field(default=None, ge=0.1, le=2.5),
         model: TtsModel = Field(default="bulbul:v3"),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
+        speaker = resolve_tts_speaker(model, speaker)
         ws_url = f"{sc.config.base_url.replace('http', 'ws', 1)}{TTS_STREAM_PATH}?model={model}"
 
         chunks: list[bytes] = []
@@ -148,7 +182,11 @@ def register(mcp: FastMCP) -> None:
                 async with sc.client.stream_ws(ws_url) as ws:
                     await ws.send(
                         _ws_config_payload(
-                            speaker=speaker, language_code=target_language_code, pace=pace
+                            speaker=speaker,
+                            language_code=target_language_code,
+                            pace=pace,
+                            pitch=pitch,
+                            loudness=loudness,
                         )
                     )
                     await ws.send(_ws_text_payload(text))
@@ -183,12 +221,14 @@ def register(mcp: FastMCP) -> None:
                 rest_resp = await sc.client.post_json(
                     TTS_PATH,
                     json_body={
-                        "inputs": [text],
+                        "text": text,
                         "target_language_code": target_language_code,
                         "speaker": speaker,
                         "speech_sample_rate": 24000,
                         "pace": pace,
                         "model": model,
+                        **({"pitch": pitch} if pitch is not None else {}),
+                        **({"loudness": loudness} if loudness is not None else {}),
                     },
                 )
                 payload, call = rest_resp
@@ -210,25 +250,34 @@ def register(mcp: FastMCP) -> None:
             "file_path": stored.file_path,
             "resource_uri": stored.resource_uri,
             "size_bytes": stored.size_bytes,
+            "speaker": speaker,
+            "model": model,
             "completed_at": time.time(),
             "observability": metrics.to_response_block(),
         }
 
 
-def _ws_config_payload(*, speaker: str, language_code: str, pace: float) -> str:
+def _ws_config_payload(
+    *,
+    speaker: str,
+    language_code: str,
+    pace: float,
+    pitch: float | None = None,
+    loudness: float | None = None,
+) -> str:
     import json as _json
 
-    return _json.dumps(
-        {
-            "type": "config",
-            "data": {
-                "speaker": speaker,
-                "language_code": language_code,
-                "pace": pace,
-                "output_audio_codec": "wav",
-            },
-        }
-    )
+    data: dict[str, Any] = {
+        "speaker": speaker,
+        "language_code": language_code,
+        "pace": pace,
+        "output_audio_codec": "wav",
+    }
+    if pitch is not None:
+        data["pitch"] = pitch
+    if loudness is not None:
+        data["loudness"] = loudness
+    return _json.dumps({"type": "config", "data": data})
 
 
 def _ws_text_payload(text: str) -> str:

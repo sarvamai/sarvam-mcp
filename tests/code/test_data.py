@@ -40,3 +40,19 @@ def test_pricing_table_covers_every_model_in_reference():
     # Every referenced model must appear in PRICING.
     missing = referenced_models - _data.PRICING.keys()
     assert not missing, f"Pricing entries missing for: {missing}"
+
+
+def test_v4_flash_roster_matches_live_api():
+    # Matches docs.sarvam.ai; the 2 live Assamese personas are intentionally excluded.
+    roster = _data.SPEAKERS_BY_MODEL["bulbul:v4-flash"]
+    assert len(roster) == 222 and len(set(roster)) == 222
+    assert "shubh_enhi_ads" in roster  # documented default
+    assert "simran_en_customer" in roster
+    assert not set(roster) & set(_data.V3_SPEAKERS)  # v3 names are rejected on v4-flash
+
+
+def test_v4_flash_roster_reflects_2026_10_06_renames():
+    roster = set(_data.SPEAKERS_BY_MODEL["bulbul:v4-flash"])
+    assert {"arnab_bn_conversation", "aravind_ta_ads", "aravind_ta_suspense"} <= roster
+    assert not roster & {"bappa_bn_conversation", "vetri_ta_ads", "vetri_ta_suspense"}
+    assert not any("_as_" in s for s in roster)  # Assamese voices need Sarvam to enable them

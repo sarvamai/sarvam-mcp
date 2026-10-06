@@ -14,9 +14,9 @@ from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import (
-    BulbulSpeaker,
     LanguageCode,
     TtsLanguageCode,
+    TtsModel,
     ready_ctx,
     resolve_file_input,
 )
@@ -51,7 +51,18 @@ def register(mcp: FastMCP) -> None:
             default="unknown",
             description="STT language hint. 'unknown' enables auto-detect.",
         ),
-        speaker: BulbulSpeaker = Field(default="shubh"),
+        speaker: str | None = Field(
+            default=None,
+            description=(
+                "TTS voice. Defaults to the model's default (`shubh` for bulbul:v3, "
+                "`shubh_enhi_ads` for bulbul:v4-flash). Speaker IDs are model-specific — "
+                "see sarvam_code_speakers."
+            ),
+        ),
+        tts_model: TtsModel = Field(
+            default="bulbul:v3",
+            description="`bulbul:v3` (default) or `bulbul:v4-flash` (persona speakers).",
+        ),
         translate_model: str = Field(
             default="mayura:v1",
             description="`mayura:v1` (11 langs, modes) or `sarvam-translate:v1` (22 langs).",
@@ -96,6 +107,7 @@ def register(mcp: FastMCP) -> None:
                     translated,
                     target_language_code=target_language_code,
                     speaker=speaker,
+                    model=tts_model,
                     filename_prefix="sv-dub",
                     metrics=metrics,
                 )
