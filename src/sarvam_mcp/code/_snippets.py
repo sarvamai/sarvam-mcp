@@ -20,10 +20,10 @@ resp = httpx.post(
     "https://api.sarvam.ai/text-to-speech",
     headers={"api-subscription-key": API_KEY},
     json={
-        "inputs": ["नमस्ते, आज मौसम कैसा है?"],
+        "text": "नमस्ते, आज मौसम कैसा है?",
         "target_language_code": "hi-IN",
         "speaker": "shubh",         # v3 voice; see sarvam_code_speakers
-        "model": "bulbul:v3",
+        "model": "bulbul:v3",  # or "bulbul:v4-flash" + a persona speaker, e.g. "simran_en_customer"
         "speech_sample_rate": 24000,
         "enable_preprocessing": True,
     },
@@ -49,10 +49,10 @@ const resp = await fetch("https://api.sarvam.ai/text-to-speech", {
     "content-type": "application/json",
   },
   body: JSON.stringify({
-    inputs: ["नमस्ते, आज मौसम कैसा है?"],
+    text: "नमस्ते, आज मौसम कैसा है?",
     target_language_code: "hi-IN",
     speaker: "shubh",          // v3 voice
-    model: "bulbul:v3",
+    model: "bulbul:v3",        // or "bulbul:v4-flash" with a persona speaker, e.g. "simran_en_customer"
     speech_sample_rate: 24000,
     enable_preprocessing: true,
   }),
@@ -70,7 +70,7 @@ curl -sS https://api.sarvam.ai/text-to-speech \\
   -H "api-subscription-key: $SARVAM_API_KEY" \\
   -H "content-type: application/json" \\
   -d '{
-    "inputs": ["नमस्ते, आज मौसम कैसा है?"],
+    "text": "नमस्ते, आज मौसम कैसा है?",
     "target_language_code": "hi-IN",
     "speaker": "shubh",
     "model": "bulbul:v3",
