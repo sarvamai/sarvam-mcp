@@ -38,7 +38,7 @@ EndpointPath = Literal[
     "/text-to-speech/pronunciation-dictionary",
     "/text-to-speech/ws",
 ]
-TtsModel = Literal["bulbul:v3", "bulbul:v4-flash"]
+TtsModel = Literal["bulbul:v3"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -93,11 +93,8 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_code_speakers",
         description=(
             "Build-time tool — helps write code that uses Sarvam. For runtime actions, use sarvam_tools_* instead.\n\n"
-            "List TTS speakers compatible with a given model tag. Speaker IDs are "
-            "model-specific: bulbul:v3 has 37 short-name voices; bulbul:v4-flash has "
-            "222 persona IDs (`<voice>_<lang>_<style>`; Assamese voices are not "
-            "included — contact Sarvam for access). Returns each speaker with a "
-            "brief tone hint where available."
+            "List TTS speakers compatible with a given model tag. The v3 roster "
+            "has 37 voices. Returns each speaker with a brief tone hint where available."
         ),
     )
     async def sarvam_code_speakers(
@@ -128,7 +125,7 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         model: str | None = Field(
             default=None,
-            description="Specific model id, e.g. 'bulbul:v3' or 'bulbul:v4-flash'. Omit to list all.",
+            description="Specific model id, e.g. 'bulbul:v3'. Omit to list all.",
         ),
     ) -> dict[str, Any]:
         if model:

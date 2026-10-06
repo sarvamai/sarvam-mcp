@@ -122,7 +122,7 @@ LanguageCode = Literal[
     "unknown",  # Auto-detect (STT API, kept for backward compat)
 ]
 
-# Subset of languages with TTS voices (bulbul:v3 / bulbul:v4-flash). STT covers all 23 above.
+# Subset that the TTS API (bulbul:v3) supports. STT covers all 23 above.
 TtsLanguageCode = Literal[
     "en-IN",
     "hi-IN",
@@ -138,28 +138,18 @@ TtsLanguageCode = Literal[
 ]
 
 
-# ---- TTS models + speakers -------------------------------------------------
+# ---- TTS speakers (bulbul:v3 roster) --------------------------------------
 #
-# Speaker IDs are model-specific: bulbul:v3 uses short names (``shubh``,
-# ``priya``); bulbul:v4-flash uses persona IDs (``simran_en_customer``). The
-# API rejects a mismatch with an error that lists the valid speakers, so the
-# speaker is a plain string rather than a Literal. Rosters live in
-# ``sarvam_mcp.code._data`` and are served by ``sarvam_code_speakers``.
-# Default stays bulbul:v3 so existing callers (and their v3 speaker names)
-# keep working; pass ``model="bulbul:v4-flash"`` to opt in.
+# Live-tested 2026-04-27. Default model is bulbul:v3. MCP exposes this Literal
+# for autocomplete; the API still validates model vs. speaker at request time.
 
-TtsModel = Literal["bulbul:v3", "bulbul:v4-flash"]
-DEFAULT_TTS_MODEL: TtsModel = "bulbul:v3"
-DEFAULT_TTS_SPEAKERS: dict[str, str] = {
-    "bulbul:v3": "shubh",
-    "bulbul:v4-flash": "shubh_enhi_ads",
-}
-
-
-def resolve_tts_speaker(model: str, speaker: str | None) -> str:
-    """The caller's speaker, or the model's documented default."""
-    return speaker or DEFAULT_TTS_SPEAKERS.get(model, DEFAULT_TTS_SPEAKERS[DEFAULT_TTS_MODEL])
-
+BulbulSpeaker = Literal[
+    "aditya", "ritu", "ashutosh", "priya", "neha", "rahul", "pooja", "rohan",
+    "simran", "kavya", "amit", "dev", "ishita", "shreya", "ratan", "varun",
+    "manan", "sumit", "roopa", "kabir", "aayan", "shubh", "advait", "anand",
+    "tanya", "tarun", "sunny", "mani", "gokul", "vijay", "shruti", "suhani",
+    "mohit", "kavitha", "rehan", "soham", "rupali",
+]
 
 # Chat completions — same IDs as ``sarvam_tools_llm_complete``.
 # sarvam-30b and sarvam-m were deprecated by Sarvam. Both remaining IDs are

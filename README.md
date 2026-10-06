@@ -82,8 +82,8 @@ All defaults below reflect the latest non-deprecated models.
 | Tool | What it does | Default model |
 |---|---|---|
 | `sarvam_stt_transcribe` | Audio file → transcript (5 modes) | `saaras:v4` |
-| `sarvam_tts_speak` | Text → audio file | `bulbul:v3`, `bulbul:v4-flash` |
-| `sarvam_tts_stream` | Text → streamed audio | `bulbul:v3`, `bulbul:v4-flash` |
+| `sarvam_tts_speak` | Text → audio file | `bulbul:v3` |
+| `sarvam_tts_stream` | Text → streamed audio | `bulbul:v3` |
 | `sarvam_translate` | Cross-language text translate | `mayura:v1` |
 | `sarvam_transliterate` | Script conversion | — |
 | `sarvam_identify_language` | Language + script detect | — |
