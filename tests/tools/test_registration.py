@@ -11,9 +11,9 @@ EXPECTED_TOOLS = {
     "sarvam_tools_set_api_key",
     # Atomic — one tool per Sarvam endpoint
     "sarvam_tools_stt_transcribe",
-    "sarvam_tools_stt_translate",
     "sarvam_tools_stt_batch_submit",
     "sarvam_tools_stt_batch_status",
+    "sarvam_tools_stt_realtime",
     "sarvam_tools_tts_speak",
     "sarvam_tools_tts_stream",
     "sarvam_tools_translate",
@@ -21,7 +21,12 @@ EXPECTED_TOOLS = {
     "sarvam_tools_identify_language",
     "sarvam_tools_text_analytics",
     "sarvam_tools_llm_complete",
+    "sarvam_tools_vision_digitise",
     "sarvam_tools_vision_extract",
+    "sarvam_tools_document_translate",
+    "sarvam_tools_document_translate_status",
+    "sarvam_tools_dubbing_submit",
+    "sarvam_tools_dubbing_status",
     # Composite /sv-* workflows
     "sarvam_tools_voice",
     "sarvam_tools_dub",

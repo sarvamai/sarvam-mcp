@@ -81,16 +81,20 @@ All defaults below reflect the latest non-deprecated models.
 
 | Tool | What it does | Default model |
 |---|---|---|
-| `sarvam_stt_transcribe` | Audio file → transcript (5 modes) | `saaras:v4` |
+| `sarvam_stt_transcribe` | Audio file → transcript (5 modes, including English via `mode=translate`) | `saaras:v4` |
+| `sarvam_stt_realtime` | Mono WAV → realtime transcript | `saaras:v3-realtime` |
 | `sarvam_tts_speak` | Text → audio file | `bulbul:v3`, `bulbul:v4-flash` |
 | `sarvam_tts_stream` | Text → streamed audio | `bulbul:v3`, `bulbul:v4-flash` |
 | `sarvam_translate` | Cross-language text translate | `mayura:v1` |
+| `sarvam_document_translate` | Whole document, layout preserved | — |
 | `sarvam_transliterate` | Script conversion | — |
 | `sarvam_identify_language` | Language + script detect | — |
 | `sarvam_text_analytics` | Typed Q&A over text | — |
 | `sarvam_llm_complete` | Chat completions | `sarvam-105b` |
-| `sarvam_vision_extract` | Document Intelligence | Sarvam Vision |
-| `sarvam_vision_job_status` | Poll Document Intelligence job | — |
+| `sarvam_vision_digitise` | Document OCR to markdown, HTML, or JSON | Sarvam Vision |
+| `sarvam_vision_extract` | Schema extraction from a document | Sarvam Vision |
+| `sarvam_vision_job_status` | Poll a Document AI job | — |
+| `sarvam_dubbing_submit` | Official video/audio dubbing job | — |
 | `sarvam_pronunciation_list` | List pronunciation dictionaries | — |
 | `sarvam_pronunciation_get` | Get a pronunciation dictionary | — |
 | `sarvam_pronunciation_create` | Create a pronunciation dictionary | — |

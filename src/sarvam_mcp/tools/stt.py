@@ -1,11 +1,15 @@
-"""Speech-to-text tools — transcribe (Saaras v4), translate (legacy), batch jobs."""
+"""Speech-to-text — REST, batch v1, and realtime WebSocket."""
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import contextlib
 import json
+import wave
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlencode
 
 import httpx
 from fastmcp import Context, FastMCP
@@ -15,8 +19,8 @@ from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
 
 STT_PATH = "/speech-to-text"
-STT_TRANSLATE_PATH = "/speech-to-text-translate"
 STT_JOB_BASE = "/speech-to-text/job/v1"
+STT_REALTIME_PATH = "/speech-to-text-realtime/ws"
 STT_JOB_UPLOAD = f"{STT_JOB_BASE}/upload-files"
 STT_JOB_DOWNLOAD = f"{STT_JOB_BASE}/download-files"
 
@@ -29,11 +33,10 @@ SttModel = Literal["saaras:v4", "saaras:v3"]
 _MODE_CAPABLE_MODELS = {"saaras:v4", "saaras:v3"}
 
 SttMode = Literal["transcribe", "translate", "verbatim", "translit", "codemix"]
+RealtimeModel = Literal["saaras:v3-realtime", "saaras:v4"]
+StreamType = Literal["fast", "balanced", "simulated"]
 
 InputAudioCodec = Literal["pcm_s16le", "pcm_l16", "pcm_raw"]
-
-# Legacy model types kept for the deprecated translate tool.
-SaarasModel = Literal["saaras:v4", "saaras:v3", "saaras:v3-realtime", "saaras:v2.5"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -50,6 +53,7 @@ def register(mcp: FastMCP) -> None:
             "  • `codemix` — English words in English, Indic words in native script\n\n"
             "The default `language_code='unknown'` auto-detects, but specifying the "
             "language (e.g. `hi-IN`, `ta-IN`) gives better accuracy.\n"
+            "Speech-to-English uses this tool with `mode='translate'`.\n"
             "For very long files (>30s), prefer `sarvam_stt_batch_submit`."
         ),
     )
@@ -107,6 +111,7 @@ def register(mcp: FastMCP) -> None:
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
+        _check_keyterms(keyterms, model)
         async with resolve_file_input(
             file_path=audio_path, file_base64=audio_base64,
             file_url=audio_url, filename=filename,
@@ -136,62 +141,6 @@ def register(mcp: FastMCP) -> None:
             "language_probability": payload.get("language_probability"),
             "diarized_transcript": payload.get("diarized_transcript"),
             "timestamps": payload.get("timestamps"),
-            "observability": metrics.to_response_block(),
-        }
-
-    @mcp.tool(
-        name="sarvam_tools_stt_translate",
-        description=(
-            "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "DEPRECATED: Use `sarvam_tools_stt_transcribe` with `mode='translate'` instead.\n\n"
-            "Transcribe an Indic-language audio file directly into English text "
-            "using the legacy `/speech-to-text-translate` endpoint. "
-            "This endpoint will be removed in a future version."
-        ),
-    )
-    async def sarvam_stt_translate(
-        ctx: Context,
-        audio_path: str | None = Field(default=None, description="Local path to the audio file."),
-        audio_base64: str | None = Field(default=None, description="Base64-encoded audio data."),
-        audio_url: str | None = Field(default=None, description="URL to fetch the audio file from."),
-        filename: str | None = Field(default=None, description="Filename with extension (for base64/URL)."),
-        with_diarization: bool = Field(
-            default=False, description="Return per-speaker turns."
-        ),
-        model: SaarasModel = Field(
-            default="saaras:v2.5",
-            description=(
-                "Legacy Saaras model for the /speech-to-text-translate endpoint. "
-                "Prefer using sarvam_tools_stt_transcribe with mode='translate' and saaras:v4."
-            ),
-        ),
-    ) -> dict[str, Any]:
-        sc = await ready_ctx(ctx)
-        async with resolve_file_input(
-            file_path=audio_path, file_base64=audio_base64,
-            file_url=audio_url, filename=filename,
-        ) as path:
-            with measure_tool() as metrics:
-                with path.open("rb") as fh:
-                    files = {"file": (path.name, fh, _guess_audio_mime(path))}
-                    data: dict[str, Any] = {
-                        "model": model,
-                        "with_diarization": str(with_diarization).lower(),
-                    }
-                    payload, call = await sc.client.post_multipart(
-                        STT_TRANSLATE_PATH, data=data, files=files
-                    )
-                metrics.merge(call)
-
-        return {
-            "transcript": payload.get("transcript", ""),
-            "language_code": payload.get("language_code"),
-            "diarized_transcript": payload.get("diarized_transcript"),
-            "deprecation_notice": (
-                "This tool uses the legacy /speech-to-text-translate endpoint. "
-                "Migrate to sarvam_tools_stt_transcribe with "
-                "mode='translate' and model='saaras:v4'."
-            ),
             "observability": metrics.to_response_block(),
         }
 
@@ -269,6 +218,7 @@ def register(mcp: FastMCP) -> None:
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
+        _check_keyterms(keyterms, model)
         async with resolve_file_input(
             file_path=audio_path, file_base64=audio_base64,
             file_url=audio_url, filename=filename,
@@ -466,6 +416,105 @@ def register(mcp: FastMCP) -> None:
             "observability": metrics.to_response_block(),
         }
 
+    @mcp.tool(
+        name="sarvam_tools_stt_realtime",
+        description=(
+            "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
+            "Transcribe a mono 16-bit WAV (8000 or 16000 Hz) over "
+            "GET /speech-to-text-realtime/ws. Use this when you need the realtime "
+            "protocol (partials, VAD). Compressed audio and long recordings belong "
+            "on sarvam_tools_stt_transcribe or sarvam_tools_stt_batch_submit.\n\n"
+            "Default model is saaras:v3-realtime. saaras:v4 adds keyterms. "
+            "`language_code='unknown'` is sent as `auto`."
+        ),
+    )
+    async def sarvam_stt_realtime(
+        ctx: Context,
+        audio_path: str = Field(
+            description="Absolute path to a mono 16-bit PCM WAV at 8 kHz or 16 kHz.",
+        ),
+        language_code: LanguageCode = Field(default="unknown"),
+        model: RealtimeModel = Field(default="saaras:v3-realtime"),
+        mode: SttMode = Field(default="transcribe"),
+        stream_type: StreamType = Field(
+            default="simulated",
+            description="'simulated' returns finals only. 'fast' or 'balanced' also emit partials.",
+        ),
+        keyterms: list[str] | None = Field(
+            default=None, description="Saaras v4 only. Up to 50 terms."
+        ),
+    ) -> dict[str, Any]:
+        sc = await ready_ctx(ctx)
+        _check_keyterms(keyterms, model)
+        path = Path(audio_path).expanduser()
+        if not path.is_file():
+            raise FileNotFoundError(f"Audio file not found: {path}")
+        pcm, sample_rate = _read_realtime_wav(path)
+
+        params: dict[str, str] = {
+            "language_code": "auto" if language_code == "unknown" else language_code,
+            "model": model,
+            "mode": mode,
+            "encoding": "linear16",
+            "sample_rate": str(sample_rate),
+            "stream_type": stream_type,
+        }
+        if keyterms and model == "saaras:v4":
+            params["keyterms"] = json.dumps(keyterms)
+        ws_url = _ws_url(sc.config.base_url, STT_REALTIME_PATH, params)
+
+        finals: list[dict[str, Any]] = []
+        partials: list[str] = []
+        with measure_tool() as metrics:
+            async with sc.client.stream_ws(ws_url) as ws:
+                sender = asyncio.create_task(_send_realtime_audio(ws, pcm, sample_rate))
+                try:
+                    while True:
+                        raw = await asyncio.wait_for(ws.recv(), timeout=120)
+                        event = _parse_ws(raw)
+                        kind = event.get("event") or event.get("type")
+                        if kind == "transcript.partial" and event.get("text"):
+                            partials.append(event["text"])
+                        elif kind == "transcript.final":
+                            finals.append(event)
+                        elif kind == "session.end":
+                            break
+                        elif kind == "error":
+                            data = event.get("data") or {}
+                            fatal = event.get("is_fatal") or (
+                                data.get("is_fatal") if isinstance(data, dict) else False
+                            )
+                            message = event.get("message") or data or event
+                            if fatal:
+                                raise RuntimeError(f"Realtime STT error: {message}")
+                finally:
+                    sender.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await sender
+
+        transcript = " ".join(
+            str(item.get("text") or "") for item in finals if item.get("text")
+        ).strip()
+        return {
+            "transcript": transcript,
+            "finals": finals,
+            "partials": partials[-5:],
+            "model": model,
+            "observability": metrics.to_response_block(),
+        }
+
+
+def _check_keyterms(keyterms: list[str] | None, model: str) -> None:
+    if not keyterms:
+        return
+    if model != "saaras:v4":
+        raise ValueError("keyterms are supported only on saaras:v4.")
+    if len(keyterms) > 50:
+        raise ValueError("keyterms accepts at most 50 terms.")
+    too_long = [term for term in keyterms if len(term) > 64]
+    if too_long:
+        raise ValueError(f"keyterms must be 64 characters or fewer: {too_long[:3]}")
+
 
 def _output_filenames(status: dict[str, Any]) -> list[str]:
     """Output file names listed under ``job_details[].outputs[]`` of a status payload."""
@@ -493,6 +542,66 @@ async def _fetch_first_output(
     async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as dl:
         dl_resp = await dl.get(url)
     return (dl_resp.json() if dl_resp.is_success else None), call
+
+
+def _read_realtime_wav(path: Path) -> tuple[bytes, int]:
+    try:
+        with wave.open(str(path), "rb") as wf:
+            channels = wf.getnchannels()
+            width = wf.getsampwidth()
+            rate = wf.getframerate()
+            frames = wf.readframes(wf.getnframes())
+    except wave.Error as exc:
+        raise ValueError(
+            "Realtime STT needs a PCM WAV. Use sarvam_tools_stt_transcribe "
+            "for mp3 and other compressed formats."
+        ) from exc
+    if channels != 1 or width != 2 or rate not in (8000, 16000):
+        raise ValueError(
+            "Realtime STT accepts mono 16-bit WAV at 8000 or 16000 Hz "
+            f"(got channels={channels}, sampwidth={width}, rate={rate})."
+        )
+    return frames, rate
+
+
+async def _send_realtime_audio(ws: Any, pcm: bytes, sample_rate: int) -> None:
+    # ~100 ms of 16-bit mono audio.
+    chunk_size = sample_rate // 10 * 2
+    for start in range(0, len(pcm), chunk_size):
+        chunk = pcm[start : start + chunk_size]
+        await ws.send(
+            json.dumps(
+                {
+                    "event": "audio_input",
+                    "audio": base64.b64encode(chunk).decode("ascii"),
+                }
+            )
+        )
+        await asyncio.sleep(0)
+    await ws.send(json.dumps({"event": "flush"}))
+    await ws.send(json.dumps({"event": "end"}))
+
+
+def _parse_ws(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    if not isinstance(raw, str):
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _ws_url(base_url: str, path: str, params: dict[str, str]) -> str:
+    root = base_url.rstrip("/")
+    if root.startswith("https://"):
+        root = "wss://" + root[len("https://") :]
+    elif root.startswith("http://"):
+        root = "ws://" + root[len("http://") :]
+    query = urlencode(params)
+    return f"{root}{path}?{query}" if query else f"{root}{path}"
 
 
 def _guess_audio_mime(path: Path) -> str:

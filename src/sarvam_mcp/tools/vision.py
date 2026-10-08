@@ -1,21 +1,17 @@
-"""Sarvam Vision — Document Intelligence (job-based async pipeline).
+"""Sarvam Vision — Document AI digitise and schema extract.
 
-The Document Intelligence API is a multi-step pipeline:
-  1. Create a job  (POST /doc-digitization/job/v1)
-  2. Get upload URLs (POST /doc-digitization/job/v1/upload-files)
-  3. Upload the file to the presigned URL (PUT to Azure/GCS SAS URL)
-  4. Start the job  (POST /doc-digitization/job/v1/{job_id}/start)
-  5. Poll status    (GET  /doc-digitization/job/v1/{job_id}/status)
-  6. Download output from the presigned output URL
+Both jobs are asynchronous:
 
-We expose two MCP tools:
-  - sarvam_tools_vision_extract: orchestrates the full pipeline end-to-end
-  - sarvam_tools_vision_job_status: poll an existing job
+  POST /doc-ai/v1/job/digitise   or   POST /doc-ai/v1/job/extract
+  GET  /doc-ai/v1/job/{job_id}/status
+  GET  /doc-ai/v1/job/{job_id}/download-url   (digitise)
+  GET  /doc-ai/v1/job/{job_id}/results        (extract)
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,148 +19,189 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from sarvam_mcp.observability import measure_tool
-from sarvam_mcp.tools._common import LanguageCode, ready_ctx, resolve_file_input
+from sarvam_mcp.tools._common import ready_ctx, resolve_file_input
 
-DOC_JOB_BASE = "/doc-digitization/job/v1"
-DOC_JOB_UPLOAD = f"{DOC_JOB_BASE}/upload-files"
+DOC_AI_BASE = "/doc-ai/v1/job"
+DIGITISE_PATH = f"{DOC_AI_BASE}/digitise"
+EXTRACT_PATH = f"{DOC_AI_BASE}/extract"
 
-OutputFormat = Literal["md", "html", "json"]
+DigitiseFormat = Literal["md", "html", "json"]
+ExtractFormat = Literal["json", "csv", "xlsx"]
+DocumentContent = Literal["printed", "handwritten", "mixed"]
 
-# Max 10 pages per the API docs.
+TERMINAL = {"completed", "partially_completed", "failed", "rejected"}
 MAX_POLL_ATTEMPTS = 60
-POLL_INTERVAL_SECONDS = 3
+POLL_INTERVAL_SECONDS = 5
 
 
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
-        name="sarvam_tools_vision_extract",
+        name="sarvam_tools_vision_digitise",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Extract text + structure from a document or image using Sarvam Vision "
-            "(Document Intelligence). Supports 23 Indian languages with table "
-            "preservation. Outputs markdown (default), HTML, or JSON.\n\n"
-            "This runs the full async pipeline: create job → upload file → "
-            "start → poll until complete. Max 10 pages per document.\n\n"
-            "Returns the output download URL (presigned) and job metadata. "
-            "The output is delivered as a ZIP file containing the chosen format "
-            "plus a JSON file with page-level data."
+            "Digitise a document with Sarvam Vision (POST /doc-ai/v1/job/digitise). "
+            "Full-document OCR that keeps layout, reading order, and tables. "
+            "Output is markdown (`md`), HTML, or JSON.\n\n"
+            "Uploads the file, polls until a terminal status, and returns the "
+            "download URL. Max 10 pages. Use `language` (not language_code). "
+            "Pass `md`, not `markdown`."
         ),
     )
-    async def sarvam_vision_extract(
+    async def sarvam_vision_digitise(
         ctx: Context,
         document_path: str | None = Field(
-            default=None, description="Local path to a PDF, image (png/jpg/jpeg), or ZIP.",
+            default=None,
+            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
         ),
         document_base64: str | None = Field(
-            default=None, description="Base64-encoded document data (for remote MCP).",
+            default=None, description="Base64-encoded document (for remote MCP).",
         ),
         document_url: str | None = Field(
             default=None, description="URL to fetch the document from.",
         ),
         filename: str | None = Field(
-            default=None, description="Filename with extension (for base64/URL), e.g. 'invoice.pdf'.",
+            default=None,
+            description="Filename with extension. Required for base64 or URL inputs.",
         ),
-        output_format: OutputFormat = Field(
+        output_format: DigitiseFormat = Field(
             default="md",
-            description="Output format: 'md' (Markdown), 'html', or 'json'. Delivered as ZIP.",
+            description="'md', 'html', or 'json'. Do not pass 'markdown'.",
         ),
-        language_code: LanguageCode = Field(
-            default="hi-IN",
-            description="Primary language of the document (BCP-47). Helps optimize accuracy.",
+        language: str = Field(
+            default="en-IN",
+            description="BCP-47 language of the document, e.g. 'hi-IN'. Field name is language.",
+        ),
+        document_content: DocumentContent = Field(
+            default="printed",
+            description="'printed', 'handwritten', or 'mixed'.",
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         async with resolve_file_input(
-            file_path=document_path, file_base64=document_base64,
-            file_url=document_url, filename=filename,
+            file_path=document_path,
+            file_base64=document_base64,
+            file_url=document_url,
+            filename=filename,
         ) as path:
             with measure_tool() as metrics:
-                # Step 1: Create the job
-                await ctx.info("Creating Document Intelligence job…")
-                create_body: dict[str, Any] = {
-                    "job_parameters": {
-                        "language": language_code if language_code != "unknown" else "hi-IN",
-                        "output_format": output_format,
-                    },
-                }
-                create_resp, call = await sc.client.post_json(
-                    DOC_JOB_BASE, json_body=create_body
-                )
-                metrics.merge(call)
-                job_id = create_resp["job_id"]
-
-                # Step 2: Get upload URLs
-                await ctx.info(f"Getting upload URL for job {job_id}…")
-                upload_req: dict[str, Any] = {
-                    "job_id": job_id,
-                    "files": [path.name],
-                }
-                upload_resp, call = await sc.client.post_json(
-                    DOC_JOB_UPLOAD, json_body=upload_req
-                )
-                metrics.merge(call)
-
-                upload_urls = upload_resp.get("upload_urls", {})
-                if not upload_urls:
-                    raise RuntimeError(f"No upload URLs returned for job {job_id}")
-
-                # Step 3: Upload file to the presigned URL
-                await ctx.info("Uploading document…")
-                file_details = next(iter(upload_urls.values()))
-                presigned_url = file_details["file_url"]
-                file_metadata = file_details.get("file_metadata") or {}
-
-                extra_headers = {str(k): str(v) for k, v in file_metadata.items()}
                 with path.open("rb") as fh:
-                    blob_metrics = await sc.client.put_blob(
-                        presigned_url,
-                        fh.read(),
-                        content_type=_guess_doc_mime(path),
-                        extra_headers=extra_headers,
+                    created, call = await sc.client.post_multipart(
+                        DIGITISE_PATH,
+                        data={
+                            "language": language,
+                            "output_format": output_format,
+                            "content_type": document_content,
+                            "model": "sarvam-vision-v1",
+                        },
+                        files={"file": (path.name, fh, _guess_doc_mime(path))},
                     )
-                metrics.merge(blob_metrics)
-
-                # Step 4: Start the job
-                await ctx.info("Starting processing…")
-                start_resp, call = await sc.client.post_json(
-                    f"{DOC_JOB_BASE}/{job_id}/start", json_body={}
-                )
                 metrics.merge(call)
-
-                # Step 5: Poll for completion
-                await ctx.info("Polling for completion…")
-                terminal_states = {"Completed", "PartiallyCompleted", "Failed"}
-                status_resp: dict[str, Any] = {}
-                for attempt in range(MAX_POLL_ATTEMPTS):
-                    status_resp, call = await sc.client.get_json(
-                        f"{DOC_JOB_BASE}/{job_id}/status"
+                job_id = created["job_id"]
+                status = await _poll_job(ctx, sc, job_id, metrics)
+                download = None
+                if str(status.get("status", "")).lower() in {"completed", "partially_completed"}:
+                    download, call = await sc.client.get_json(
+                        f"{DOC_AI_BASE}/{job_id}/download-url"
                     )
                     metrics.merge(call)
-                    job_state = status_resp.get("job_state", "")
-                    if job_state in terminal_states:
-                        break
-                    if (attempt + 1) % 5 == 0:
-                        await ctx.report_progress(attempt + 1, MAX_POLL_ATTEMPTS)
-                    await asyncio.sleep(POLL_INTERVAL_SECONDS)
-                else:
-                    return {
-                        "job_id": job_id,
-                        "job_state": status_resp.get("job_state", "timeout"),
-                        "error": (
-                            f"Job did not complete within "
-                            f"{MAX_POLL_ATTEMPTS * POLL_INTERVAL_SECONDS}s. "
-                            f"Poll manually with sarvam_tools_vision_job_status."
-                        ),
-                        "observability": metrics.to_response_block(),
-                    }
 
         return {
             "job_id": job_id,
-            "job_state": status_resp.get("job_state"),
+            "status": status.get("status"),
             "output_format": output_format,
-            "page_metrics": status_resp.get("page_metrics"),
-            "output_storage_path": status_resp.get("output_storage_path"),
-            "raw_status": status_resp,
+            "usage": status.get("usage"),
+            "download": download,
+            "observability": metrics.to_response_block(),
+        }
+
+    @mcp.tool(
+        name="sarvam_tools_vision_extract",
+        description=(
+            "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
+            "Schema extraction with Sarvam Vision (POST /doc-ai/v1/job/extract). "
+            "Pass a JSON schema (root type object, every field needs type and description) "
+            "or a saved `config_id`. Returns structured fields from "
+            "GET /doc-ai/v1/job/{job_id}/results.\n\n"
+            "For full-document OCR to markdown or HTML, use sarvam_tools_vision_digitise."
+        ),
+    )
+    async def sarvam_vision_extract(
+        ctx: Context,
+        document_path: str | None = Field(
+            default=None,
+            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
+        ),
+        document_base64: str | None = Field(
+            default=None, description="Base64-encoded document (for remote MCP).",
+        ),
+        document_url: str | None = Field(
+            default=None, description="URL to fetch the document from.",
+        ),
+        filename: str | None = Field(
+            default=None,
+            description="Filename with extension. Required for base64 or URL inputs.",
+        ),
+        schema: dict[str, Any] | None = Field(
+            default=None,
+            description=(
+                "JSON schema object. Root must be type=object with properties. "
+                "Each field needs type and a non-empty description. "
+                "Provide this or config_id."
+            ),
+        ),
+        config_id: str | None = Field(
+            default=None,
+            description="Saved extraction config. Provide this or schema.",
+        ),
+        language: str = Field(default="en-IN", description="BCP-47 document language."),
+        output_format: ExtractFormat = Field(default="json"),
+    ) -> dict[str, Any]:
+        sc = await ready_ctx(ctx)
+        if schema is None and not config_id:
+            raise ValueError("Provide schema or config_id.")
+        form: dict[str, Any] = {
+            "language": language,
+            "output_format": output_format,
+            "model": "sarvam-vision-v1",
+        }
+        if schema is not None:
+            form["schema"] = json.dumps(schema)
+        if config_id:
+            form["config_id"] = config_id
+
+        async with resolve_file_input(
+            file_path=document_path,
+            file_base64=document_base64,
+            file_url=document_url,
+            filename=filename,
+        ) as path:
+            with measure_tool() as metrics:
+                with path.open("rb") as fh:
+                    created, call = await sc.client.post_multipart(
+                        EXTRACT_PATH,
+                        data=form,
+                        files={"file": (path.name, fh, _guess_doc_mime(path))},
+                    )
+                metrics.merge(call)
+                job_id = created["job_id"]
+                status = await _poll_job(ctx, sc, job_id, metrics)
+                results = None
+                if str(status.get("status", "")).lower() in {
+                    "completed",
+                    "partially_completed",
+                }:
+                    results, call = await sc.client.get_json(
+                        f"{DOC_AI_BASE}/{job_id}/results"
+                    )
+                    metrics.merge(call)
+
+        return {
+            "job_id": job_id,
+            "status": status.get("status"),
+            "usage": status.get("usage"),
+            "result": (results or {}).get("result") if isinstance(results, dict) else results,
+            "annotations": (results or {}).get("annotations") if isinstance(results, dict) else None,
+            "raw": results,
             "observability": metrics.to_response_block(),
         }
 
@@ -172,30 +209,44 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_vision_job_status",
         description=(
             "Runtime tool — calls Sarvam API now.\n\n"
-            "Poll the status of an existing Document Intelligence job. "
-            "Returns the current job state and page metrics. Once state is "
-            "'Completed', the output can be downloaded from the output URL."
+            "Poll a Document AI job at GET /doc-ai/v1/job/{job_id}/status. "
+            "Works for both digitise and extract. Terminal statuses: "
+            "completed, partially_completed, failed, rejected."
         ),
     )
     async def sarvam_vision_job_status(
         ctx: Context,
-        job_id: str = Field(description="The job_id returned by sarvam_tools_vision_extract."),
+        job_id: str = Field(description="Job id from vision_digitise or vision_extract."),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         with measure_tool() as metrics:
-            status_resp, call = await sc.client.get_json(
-                f"{DOC_JOB_BASE}/{job_id}/status"
-            )
+            status, call = await sc.client.get_json(f"{DOC_AI_BASE}/{job_id}/status")
             metrics.merge(call)
-
         return {
             "job_id": job_id,
-            "job_state": status_resp.get("job_state"),
-            "page_metrics": status_resp.get("page_metrics"),
-            "output_storage_path": status_resp.get("output_storage_path"),
-            "raw": status_resp,
+            "status": status.get("status"),
+            "usage": status.get("usage"),
+            "raw": status,
             "observability": metrics.to_response_block(),
         }
+
+
+async def _poll_job(ctx: Context, sc: Any, job_id: str, metrics: Any) -> dict[str, Any]:
+    status: dict[str, Any] = {}
+    for attempt in range(MAX_POLL_ATTEMPTS):
+        status, call = await sc.client.get_json(f"{DOC_AI_BASE}/{job_id}/status")
+        metrics.merge(call)
+        state = str(status.get("status", "")).lower()
+        if state in TERMINAL:
+            return status
+        if (attempt + 1) % 4 == 0:
+            await ctx.report_progress(attempt + 1, MAX_POLL_ATTEMPTS)
+        await asyncio.sleep(POLL_INTERVAL_SECONDS)
+    raise TimeoutError(
+        f"Document AI job {job_id} did not finish within "
+        f"{MAX_POLL_ATTEMPTS * POLL_INTERVAL_SECONDS}s. "
+        "Poll with sarvam_tools_vision_job_status."
+    )
 
 
 def _guess_doc_mime(path: Path) -> str:
@@ -207,5 +258,11 @@ def _guess_doc_mime(path: Path) -> str:
         "jpeg": "image/jpeg",
         "webp": "image/webp",
         "tiff": "image/tiff",
+        "tif": "image/tiff",
         "zip": "application/zip",
+        "html": "text/html",
+        "htm": "text/html",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     }.get(suffix, "application/octet-stream")

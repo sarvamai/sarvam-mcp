@@ -32,10 +32,11 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_dub",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Dub an Indic audio file into another Indic language. Pipeline: "
+            "Dub a short Indic audio clip into another Indic language. Pipeline: "
             "STT → Mayura or Sarvam-Translate → TTS. Returns the "
             "original transcript, translated transcript, and a path to the "
-            "newly-dubbed WAV file."
+            "newly-dubbed WAV file. For video or long media, use "
+            "sarvam_tools_dubbing_submit."
         ),
     )
     async def sv_dub(

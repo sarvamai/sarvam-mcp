@@ -162,10 +162,9 @@ def resolve_tts_speaker(model: str, speaker: str | None) -> str:
 
 
 # Chat completions — same IDs as ``sarvam_tools_llm_complete``.
-# sarvam-30b and sarvam-m were deprecated by Sarvam. Both remaining IDs are
-# served on /v1/chat/completions: sarvam-105b (128K ctx, complex reasoning/
-# agentic/coding) and sarvam-105b-conversations (32K ctx, post-trained for
-# real-time dialogue and voice-agent workloads — same price, same schema).
+# Both IDs are served on /v1/chat/completions: sarvam-105b (128K ctx, complex
+# reasoning/agentic/coding) and sarvam-105b-conversations (32K ctx, post-trained
+# for real-time dialogue and voice-agent workloads — same price, same schema).
 SarvamLLM = Literal["sarvam-105b", "sarvam-105b-conversations"]
 
 
