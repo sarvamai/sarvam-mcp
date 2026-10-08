@@ -35,6 +35,8 @@ sarvam-mcp-website:
       image: "gitopsdocker.azurecr.io/sarvam-mcp-website"
       tag: "latest"
       imagePullPolicy: Always
+      securityContext:
+        allowPrivilegeEscalation: false
       ports:
         http:
           container_port: 8000
