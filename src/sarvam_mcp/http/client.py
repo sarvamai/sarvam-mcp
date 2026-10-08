@@ -137,6 +137,30 @@ class SarvamClient:
             )
         return metrics
 
+    async def put_external(
+        self,
+        url: str,
+        content: bytes,
+        *,
+        headers: Mapping[str, str],
+    ) -> None:
+        """PUT bytes to a presigned storage URL. No Sarvam auth header.
+
+        Document translation and dubbing return a short-lived Azure or GCS URL.
+        Those hosts reject the ``api-subscription-key`` header, so this call
+        uses a separate client. Callers choose Azure blob headers themselves.
+        """
+        timeout = httpx.Timeout(300.0, connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.put(url, content=content, headers=dict(headers))
+        if response.is_success:
+            return
+        raise SarvamAPIError(
+            f"Upload to storage failed ({response.status_code}): {response.text[:500]}",
+            status_code=response.status_code,
+            body=response.text[:500],
+        )
+
     @asynccontextmanager
     async def stream_ws(
         self,

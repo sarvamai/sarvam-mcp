@@ -105,6 +105,8 @@ def build_server() -> FastMCP:
 
     from sarvam_mcp.tools import (
         auth,
+        document_translate,
+        dubbing,
         language,
         llm,
         pronunciation,
@@ -126,6 +128,8 @@ def build_server() -> FastMCP:
     llm.register(mcp)
     vision.register(mcp)
     pronunciation.register(mcp)
+    document_translate.register(mcp)
+    dubbing.register(mcp)
 
     from sarvam_mcp import code, workflows
 

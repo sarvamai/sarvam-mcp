@@ -60,7 +60,6 @@ _LID_CODES = {
 # Per-API language coverage. Keys match what the agent might pass.
 LANGUAGES_BY_API: dict[str, list[dict[str, str]]] = {
     "stt":           ALL_LANGUAGES,
-    "stt_translate": ALL_LANGUAGES,    # Saaras takes any input; output is always English.
     "tts":           [lang for lang in ALL_LANGUAGES if lang["code"] in _TTS_CODES],
     "translate":     ALL_LANGUAGES,    # sarvam-translate:v1 covers all; mayura:v1 only TTS subset.
     "transliterate": ALL_LANGUAGES,
@@ -255,6 +254,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "mode":              "str — transcribe (default) | translate | verbatim | translit | codemix (saaras:v3/v4 only)",
             "language_code":     "str — BCP-47 or 'unknown' for auto-detect",
             "with_timestamps":   "bool",
+            "keyterms":          "JSON list, saaras:v4 only, up to 50 terms of 64 chars",
             "input_audio_codec": "str (optional) — pcm_s16le | pcm_l16 | pcm_raw (required for PCM files, 16kHz only)",
         },
         "response": {
@@ -268,24 +268,10 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "Saaras v4 is the latest, recommended model (22 Indic languages + Global/Indian English). "
             "It supports 5 output modes via the `mode` parameter, same as v3. "
             "`keyterms` (v4 only): up to 50 domain terms, JSON-encoded array form field, "
-            "64 chars max each. For >30s audio, use /speech-to-text/job/v1."
+            "64 chars max each. Speech-to-English is mode=translate on this endpoint. "
+            "For >30s audio, use /speech-to-text/job/v1. "
+            "Live audio uses GET /speech-to-text-realtime/ws."
         ),
-    },
-    "/speech-to-text-translate": {
-        "method": "POST",
-        "model": "saaras:v2.5 (DEPRECATED — use /speech-to-text with mode=translate instead)",
-        "content_type": "multipart/form-data",
-        "auth_header": "api-subscription-key",
-        "request_body": {
-            "file":             "binary, required",
-            "model":            "str — saaras:v2.5",
-            "with_diarization": "bool",
-        },
-        "response": {
-            "transcript":           "str — always English",
-            "language_code":        "str — detected source language",
-        },
-        "notes": "DEPRECATED. Migrate to /speech-to-text with model=saaras:v4 and mode=translate.",
     },
     "/speech-to-text/job/v1": {
         "method": "POST",
@@ -323,6 +309,22 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "Up to 20 files per job, audio up to 2 hours; PCM must be 16kHz "
             "(set job_parameters.input_audio_codec)."
         ),
+    },
+    "/speech-to-text-realtime/ws": {
+        "method": "GET",
+        "model": "saaras:v3-realtime (default), saaras:v4",
+        "content_type": "websocket",
+        "request_body": {
+            "query":       "language_code (or auto), model, mode, encoding, sample_rate, stream_type",
+            "audio_input": "base64 linear16 PCM",
+            "flush":       "finalize buffered audio",
+            "end":         "close the session",
+        },
+        "response": {
+            "transcript.partial": "interim text",
+            "transcript.final":   "final text for the utterance",
+        },
+        "notes": "Mono 16-bit WAV only, 8000 or 16000 Hz. keyterms require saaras:v4.",
     },
     "/translate": {
         "method": "POST",
@@ -415,8 +417,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "response_oai_compatible": True,
         "notes": (
-            "OpenAI-compatible. sarvam-30b and sarvam-m were deprecated by "
-            "Sarvam. Two models live on this v1 endpoint: sarvam-105b (default, "
+            "OpenAI-compatible. Two models live on this v1 endpoint: sarvam-105b (default, "
             "complex reasoning/coding/agentic tool use) and "
             "sarvam-105b-conversations (post-trained for real-time dialogue and "
             "voice agents — same price, smaller 32K context). "
@@ -434,32 +435,76 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "access before building against it."
         ),
     },
-    "/doc-digitization/job/v1": {
+    "/doc-ai/v1/job/digitise": {
         "method": "POST",
-        "model": "Sarvam Vision (3B parameter VLM)",
-        "content_type": "application/json",
+        "model": "sarvam-vision",
+        "content_type": "multipart/form-data",
         "request_body": {
-            "job_parameters": "object — {language: BCP-47 code, output_format: 'md'|'html'|'json'}",
-            "callback":       "object (optional) — {url: str, auth_token: str} for webhook",
+            "file":          "binary, required (or upload_ids)",
+            "language":      "str — BCP-47, default en-IN. Not language_code.",
+            "output_format": "str — html (API default) | md | json. Not 'markdown'.",
+            "content_type":  "str — printed | handwritten | mixed",
+            "model":         "str — sarvam-vision-v1",
         },
         "response": {
-            "job_id":                  "str (UUID)",
-            "storage_container_type":  "str",
-            "job_parameters":          "object",
-            "job_state":               "str — Accepted",
+            "job_id": "str",
+            "status": "str — pending, then completed | partially_completed | failed | rejected",
         },
         "notes": (
-            "Job-based async pipeline: create job → get upload URLs "
-            "(/doc-digitization/job/v1/upload-files) → PUT file to presigned URL → "
-            "start (/doc-digitization/job/v1/{job_id}/start) → "
-            "poll status (/doc-digitization/job/v1/{job_id}/status). "
-            "Max 10 pages per document. Output delivered as ZIP. "
-            "This endpoint still works (live-confirmed 2026-08-14), but Sarvam's "
-            "current docs describe a newer 'Doc AI' product at /doc-ai/v1/job/ "
-            "with separate digitise() (full-document OCR, same as this) and "
-            "extract() (schema-based field extraction — pull specific fields "
-            "instead of the whole document) operations, plus CSV/XLSX output. "
-            "Worth checking docs.sarvam.ai/docai for the current recommended path."
+            "Full-document OCR. Poll GET /doc-ai/v1/job/{job_id}/status, then "
+            "GET /doc-ai/v1/job/{job_id}/download-url. Max 10 pages."
+        ),
+    },
+    "/doc-ai/v1/job/extract": {
+        "method": "POST",
+        "model": "sarvam-vision",
+        "content_type": "multipart/form-data",
+        "request_body": {
+            "file":          "binary, required (or upload_ids)",
+            "schema":        "JSON string — root type object, each field needs type and description",
+            "config_id":     "str — alternative to schema",
+            "language":      "str — BCP-47",
+            "output_format": "str — json | csv | xlsx",
+        },
+        "response": {"job_id": "str", "status": "str"},
+        "notes": "Schema extraction. Poll status, then GET /doc-ai/v1/job/{job_id}/results.",
+    },
+    "/translate/document/jobs": {
+        "method": "POST",
+        "content_type": "application/json",
+        "request_body": {
+            "source_language_code":  "str, required",
+            "target_language_codes": "list[str], 1 to 12",
+            "original_filename":     "str, required",
+            "genre":                 "str — NON_FICTION | ADULT_FICTION | CHILDREN_FICTION | RELIGIOUS | LEGAL | ACADEMIC",
+        },
+        "response": {
+            "job_id":     "str",
+            "upload_url": "str — PUT the file here with x-ms-blob-type: BlockBlob",
+        },
+        "notes": (
+            "Then POST /translate/document/jobs/{job_id}/start, "
+            "GET .../live-status, POST .../export?lang=, GET .../export/status."
+        ),
+    },
+    "/dubbing/jobs": {
+        "method": "POST",
+        "content_type": "application/json",
+        "request_body": {
+            "src_lang":       "str, required — REST field name, not source_language_code",
+            "target_langs":   "list[str], required",
+            "export_options": "list — video | audio | mp3 | srt",
+            "voice_cloning":  "bool, default true",
+            "editor_flow":    "bool — keep false for API integrations",
+        },
+        "response": {
+            "data.job_id":     "str",
+            "data.upload_url": "str",
+        },
+        "notes": (
+            "PUT the media, POST /dubbing/jobs/{job_id}/start, "
+            "GET .../live-status and GET .../export-status?limit=100. "
+            "This is the dubbing product, separate from the short-audio dub workflow."
         ),
     },
     "/text-to-speech/pronunciation-dictionary": {
@@ -516,7 +561,6 @@ PRICING: dict[str, dict[str, Any]] = {
     "saaras:v4":            {"unit": "per minute of audio",   "tier": "billed by minute (recommended, latest)"},
     "saaras:v3":            {"unit": "per minute of audio",   "tier": "billed by minute"},
     "saaras:v3-realtime":   {"unit": "per minute of audio",   "tier": "billed by minute"},
-    "saaras:v2.5":          {"unit": "per minute of audio",   "tier": "billed by minute (legacy, deprecated soon)"},
     "bulbul:v3":            {"unit": "per character",         "tier": "billed by character"},
     "bulbul:v4-flash":      {"unit": "per character",         "tier": "billed by character (assumed same unit as bulbul:v3 — docs.sarvam.ai doesn't publish a v4-flash rate yet; confirm on dashboard.sarvam.ai)"},
     "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
