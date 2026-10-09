@@ -32,6 +32,7 @@ EXPECTED_TOOLS = {
     "sarvam_tools_dub",
     "sarvam_tools_localize",
     "sarvam_tools_recall",
+    "sarvam_tools_meet",
 }
 
 
