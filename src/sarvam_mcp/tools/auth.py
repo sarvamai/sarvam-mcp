@@ -7,7 +7,9 @@ future sessions.
 
 from __future__ import annotations
 
+import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,8 @@ from pydantic import Field
 
 from sarvam_mcp.auth.api_key import StaticKeyProvider
 from sarvam_mcp.auth.context import set_auth
+
+logger = logging.getLogger("sarvam_mcp.auth")
 
 CREDENTIALS_PATH = Path("~/.sarvam/credentials").expanduser()
 DASHBOARD_URL = "https://dashboard.sarvam.ai/key-management"
@@ -110,15 +114,37 @@ def _save_key(api_key: str) -> None:
 def _restrict_permissions(path: Path) -> None:
     """Set file to owner-only access on all platforms."""
     if sys.platform == "win32":
-        # On Windows, use icacls to restrict to current user only.
-        import subprocess
-
-        username = os.environ.get("USERNAME", "")
-        if username:
-            subprocess.run(
-                ["icacls", str(path), "/inheritance:r",
-                 "/grant:r", f"{username}:(R,W)"],
-                capture_output=True,
-            )
+        _restrict_permissions_windows(path)
     else:
         os.chmod(path, 0o600)
+
+
+def _restrict_permissions_windows(path: Path) -> None:
+    """Restrict ``path`` to the current user via ``icacls``.
+
+    The POSIX ``chmod`` path raises loudly on failure; mirror that here by
+    surfacing a warning instead of silently leaving the credentials file with
+    inherited (potentially world-readable) permissions.
+    """
+    username = os.environ.get("USERNAME", "")
+    if not username:
+        logger.warning(
+            "Could not restrict permissions on %s: USERNAME is not set, so the "
+            "credentials file may be readable by other users on this machine.",
+            path,
+        )
+        return
+
+    result = subprocess.run(
+        ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:(R,W)"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.warning(
+            "Could not restrict permissions on %s (icacls exited %d): %s — the "
+            "credentials file may be readable by other users on this machine.",
+            path,
+            result.returncode,
+            (result.stderr or result.stdout).strip(),
+        )
