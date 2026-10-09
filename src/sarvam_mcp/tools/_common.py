@@ -59,28 +59,32 @@ async def resolve_file_input(
     tmp_path = Path(tmp.name)
     try:
         if file_base64 is not None:
-            data = base64.b64decode(file_base64)
-            if len(data) > max_bytes:
-                raise ValueError(
-                    f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
-                )
-            tmp.write(data)
-            tmp.close()
+            try:
+                data = base64.b64decode(file_base64)
+                if len(data) > max_bytes:
+                    raise ValueError(
+                        f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
+                    )
+                tmp.write(data)
+            finally:
+                tmp.close()
             yield tmp_path
         else:
             assert file_url is not None
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-                async with client.stream("GET", file_url) as resp:
-                    resp.raise_for_status()
-                    downloaded = 0
-                    async for chunk in resp.aiter_bytes(chunk_size=65536):
-                        downloaded += len(chunk)
-                        if downloaded > max_bytes:
-                            raise ValueError(
-                                f"Downloaded file exceeds {max_bytes} byte limit."
-                            )
-                        tmp.write(chunk)
-            tmp.close()
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
+                    async with client.stream("GET", file_url) as resp:
+                        resp.raise_for_status()
+                        downloaded = 0
+                        async for chunk in resp.aiter_bytes(chunk_size=65536):
+                            downloaded += len(chunk)
+                            if downloaded > max_bytes:
+                                raise ValueError(
+                                    f"Downloaded file exceeds {max_bytes} byte limit."
+                                )
+                            tmp.write(chunk)
+            finally:
+                tmp.close()
             yield tmp_path
     finally:
         tmp_path.unlink(missing_ok=True)
