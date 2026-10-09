@@ -37,7 +37,11 @@ class UpdateInfo:
 
 
 async def check_pypi_version(current_version: str, *, timeout: float = 5.0) -> UpdateInfo:
-    """Non-blocking PyPI version lookup.  Returns ``UpdateInfo``; never raises."""
+    """Best-effort PyPI version lookup.  Returns ``UpdateInfo``; never raises.
+
+    Awaits a network GET (bounded by ``timeout``), so the server schedules it
+    as a background task rather than on the startup path.
+    """
     info = UpdateInfo(current=current_version)
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:

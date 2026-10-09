@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware
@@ -51,15 +52,23 @@ async def _lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:
     client = SarvamClient(config.base_url)
     sink = build_sink(config.output_mode, config.base_path)
 
-    update_info = await check_pypi_version(__version__)
-    ctx = ServerContext(config=config, client=client, audio_sink=sink, update_info=update_info)
+    ctx = ServerContext(config=config, client=client, audio_sink=sink)
 
-    if update_info.update_available:
-        logger.info(
-            "Update available: v%s → v%s  (pip install --upgrade sarvam-mcp)",
-            update_info.current,
-            update_info.latest,
-        )
+    # Best-effort PyPI update check, run in the background so a slow or
+    # unreachable PyPI never blocks server startup. ``update_info`` stays
+    # ``None`` until it completes; ``sarvam_tools_upgrade`` already handles
+    # that case.
+    async def _check_for_update() -> None:
+        info = await check_pypi_version(__version__)
+        ctx.update_info = info
+        if info.update_available:
+            logger.info(
+                "Update available: v%s → v%s  (pip install --upgrade sarvam-mcp)",
+                info.current,
+                info.latest,
+            )
+
+    update_task = asyncio.create_task(_check_for_update())
 
     logger.info(
         "sarvam-mcp ready · v%s · base_url=%s output_mode=%s base_path=%s auth=%s",
@@ -72,6 +81,9 @@ async def _lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:
     try:
         yield ctx
     finally:
+        update_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await update_task
         await client.aclose()
 
 
