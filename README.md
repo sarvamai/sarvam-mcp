@@ -55,6 +55,8 @@ If you've installed via `pip install sarvam-mcp`, you can use the console script
 | **Windsurf** | Cascade settings → MCP servers |
 | **Zed** | `settings.json` → `context_servers` |
 
+For detailed step-by-step instructions per environment — Cursor (one-click install), VS Code, Claude Code, Claude Desktop, Windsurf, Zed, Codex CLI, Gemini CLI, Cline, Continue, LM Studio — plus verification and troubleshooting, see **[docs/INSTALLATION.md](docs/INSTALLATION.md)**.
+
 ### Alternative: credentials file
 
 Instead of setting `SARVAM_API_KEY` in the JSON config, you can store it in `~/.sarvam/credentials`:
