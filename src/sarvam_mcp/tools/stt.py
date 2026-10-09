@@ -39,6 +39,17 @@ StreamType = Literal["fast", "balanced", "simulated"]
 InputAudioCodec = Literal["pcm_s16le", "pcm_l16", "pcm_raw"]
 
 
+def _stt_language_code(language_code: LanguageCode) -> LanguageCode:
+    """Map the shared auto-detect token to the value the STT API expects.
+
+    The shared ``LanguageCode`` enum carries two auto-detect tokens: ``"auto"``
+    (Translate/Transliterate) and ``"unknown"`` (STT). The STT endpoints only
+    accept ``"unknown"``, so normalize ``"auto"`` to it, mirroring how
+    ``translate``/``transliterate`` normalize ``"unknown"`` to ``"auto"``.
+    """
+    return "unknown" if language_code == "auto" else language_code
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         name="sarvam_tools_stt_transcribe",
@@ -121,7 +132,7 @@ def register(mcp: FastMCP) -> None:
                     files = {"file": (path.name, fh, _guess_audio_mime(path))}
                     data: dict[str, Any] = {
                         "model": model,
-                        "language_code": language_code,
+                        "language_code": _stt_language_code(language_code),
                         "with_timestamps": str(with_timestamps).lower(),
                     }
                     if model in _MODE_CAPABLE_MODELS:
@@ -227,7 +238,9 @@ def register(mcp: FastMCP) -> None:
                 # Step 1: Create the job
                 await ctx.info("Creating batch STT job…")
                 job_params: dict[str, Any] = {
-                    "language_code": language_code if language_code != "unknown" else None,
+                    "language_code": (
+                        None if _stt_language_code(language_code) == "unknown" else language_code
+                    ),
                     "model": model,
                     "mode": mode,
                     "with_timestamps": with_timestamps,
