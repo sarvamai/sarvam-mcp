@@ -103,3 +103,25 @@ async def store(self, data: bytes, *, filename: str, mime_type: str) -> StoredAu
 - [ ] Manual: attempt to store with `filename="/absolute/path"` — verify `ValueError` is raised
 
 Fixes sarvamai/sarvam-mcp#74
+
+---
+
+## PR Description (PR #99)
+
+> ## Summary
+>
+> - `FileSink.store()` joined `base_path` with an unvalidated `filename`, allowing absolute paths (`/etc/passwd`) to silently discard `base_path` and `../` sequences to escape the output directory.
+> - Added `resolve()` + `is_relative_to()` check that raises `ValueError` before any write if the resolved path falls outside `base_path`.
+>
+> ## Changes
+>
+> - `src/sarvam_mcp/audio/sinks.py`: `FileSink.store` validates filename is contained within `base_path`.
+>
+> ## Test plan
+>
+> - [ ] `ruff check src/` passes
+> - [ ] `pytest -q` passes
+> - [ ] Manual: attempt to store with `filename="../../../etc/evil"` — verify `ValueError` is raised
+> - [ ] Manual: attempt to store with `filename="/absolute/path"` — verify `ValueError` is raised
+>
+> Fixes sarvamai/sarvam-mcp#74
