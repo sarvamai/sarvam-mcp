@@ -7,6 +7,7 @@ so tool modules can stay short and focused on their endpoint shape.
 from __future__ import annotations
 
 import base64
+import binascii
 import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -39,10 +40,7 @@ async def resolve_file_input(
     """
     provided = sum(x is not None for x in (file_path, file_base64, file_url))
     if provided != 1:
-        raise ValueError(
-            "Provide exactly one of: file path, base64 data, or URL. "
-            f"Got {provided}."
-        )
+        raise ValueError(f"Provide exactly one of: file path, base64 data, or URL. Got {provided}.")
 
     if file_path is not None:
         path = Path(file_path).expanduser()
@@ -59,11 +57,12 @@ async def resolve_file_input(
     tmp_path = Path(tmp.name)
     try:
         if file_base64 is not None:
-            data = base64.b64decode(file_base64)
+            try:
+                data = base64.b64decode(file_base64, validate=True)
+            except binascii.Error as exc:
+                raise ValueError(f"Invalid base64 data: {exc}") from exc
             if len(data) > max_bytes:
-                raise ValueError(
-                    f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
-                )
+                raise ValueError(f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit.")
             tmp.write(data)
             tmp.close()
             yield tmp_path
@@ -76,14 +75,13 @@ async def resolve_file_input(
                     async for chunk in resp.aiter_bytes(chunk_size=65536):
                         downloaded += len(chunk)
                         if downloaded > max_bytes:
-                            raise ValueError(
-                                f"Downloaded file exceeds {max_bytes} byte limit."
-                            )
+                            raise ValueError(f"Downloaded file exceeds {max_bytes} byte limit.")
                         tmp.write(chunk)
             tmp.close()
             yield tmp_path
     finally:
         tmp_path.unlink(missing_ok=True)
+
 
 # ---- Language codes -------------------------------------------------------
 #
@@ -187,9 +185,7 @@ def server_ctx(ctx: Context) -> ServerContext:
     """
     lifespan = ctx.request_context.lifespan_context
     if not isinstance(lifespan, ServerContext):
-        raise RuntimeError(
-            "Lifespan context is not a ServerContext — server.py wiring is broken."
-        )
+        raise RuntimeError("Lifespan context is not a ServerContext — server.py wiring is broken.")
     return lifespan
 
 
