@@ -124,3 +124,26 @@ async def sarvam_vision_job_status(
 - [ ] Manual: call `sarvam_tools_vision_job_status` with `job_type="extract"` on a completed extract job — verify `output` contains structured result
 
 Fixes sarvamai/sarvam-mcp#64
+
+---
+
+## PR Description (PR #98)
+
+> ## Summary
+>
+> - `sarvam_tools_vision_job_status` previously returned only status metadata, leaving callers with no way to retrieve actual output from a completed job.
+> - Added an optional `job_type` parameter (`digitise` or `extract`).
+> - When `job_type` is provided and the job has reached a terminal success state, the tool automatically calls the appropriate download endpoint and returns the result in an `output` field.
+>
+> ## Changes
+>
+> - `src/sarvam_mcp/tools/vision.py`: `sarvam_vision_job_status` now accepts `job_type` and fetches output on completion.
+>
+> ## Test plan
+>
+> - [ ] `ruff check src/` passes
+> - [ ] `pytest -q` passes
+> - [ ] Manual: call `sarvam_tools_vision_job_status` with `job_type="digitise"` on a completed job — verify `output` contains download URL
+> - [ ] Manual: call `sarvam_tools_vision_job_status` with `job_type="extract"` on a completed extract job — verify `output` contains structured result
+>
+> Fixes sarvamai/sarvam-mcp#64
