@@ -91,3 +91,24 @@ With `validate=True`, any non-alphabet character raises `binascii.Error` immedia
 - [ ] Manual: call any tool with `audio_base64="!!!!"` — verify a clear `ValueError: Invalid base64 data` is returned instead of an opaque API error
 
 Fixes sarvamai/sarvam-mcp#80
+
+---
+
+## PR Description (PR #101)
+
+> ## Summary
+>
+> - `base64.b64decode` without `validate=True` silently ignores non-alphabet characters, causing malformed payloads (e.g. `"!!!!"`) to produce empty bytes and forward a corrupt temp file to the Sarvam API.
+> - Added `validate=True` and catch `binascii.Error`, converting it to a descriptive `ValueError` before any file I/O occurs.
+>
+> ## Changes
+>
+> - `src/sarvam_mcp/tools/_common.py`: `resolve_file_input` now raises `ValueError` on invalid base64 input.
+>
+> ## Test plan
+>
+> - [ ] `ruff check src/` passes
+> - [ ] `pytest -q` passes
+> - [ ] Manual: call any tool with `audio_base64="!!!!"` — verify a clear `ValueError: Invalid base64 data` is returned instead of an opaque API error
+>
+> Fixes sarvamai/sarvam-mcp#80
