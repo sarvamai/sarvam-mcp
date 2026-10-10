@@ -104,3 +104,25 @@ def _save_key(api_key: str) -> None:
 - [ ] On Unix: call `sarvam_tools_set_api_key` with a test key, then `stat ~/.sarvam/credentials` — verify mode is `0600` and `~/.sarvam/` is `0700`
 
 Fixes sarvamai/sarvam-mcp#86
+
+---
+
+## PR Description (PR #100)
+
+> ## Summary
+>
+> - `_save_key` previously created the `.tmp` credentials file at `0o644` (world-readable) and only chmoded to `0o600` afterward, leaving a brief window where the API key was exposed to other local users.
+> - Replaced `write_text` + `chmod` with `os.open(..., O_CREAT | O_TRUNC, 0o600)` on Unix so the file is never more permissive than `0o600` at any point.
+> - Also restricts `~/.sarvam/` directory to `0o700` so other users cannot list its contents.
+>
+> ## Changes
+>
+> - `src/sarvam_mcp/tools/auth.py`: `_save_key` uses `os.open` on Unix; Windows path unchanged.
+>
+> ## Test plan
+>
+> - [ ] `ruff check src/` passes
+> - [ ] `pytest -q` passes
+> - [ ] On Unix: call `sarvam_tools_set_api_key` with a test key, then `stat ~/.sarvam/credentials` — verify mode is `0600` and `~/.sarvam/` is `0700`
+>
+> Fixes sarvamai/sarvam-mcp#86
