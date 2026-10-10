@@ -9,6 +9,6 @@ the atomic tools so any naming clash falls in favor of the explicit
 ``sarvam_*`` ones.
 """
 
-from sarvam_mcp.workflows import dub, localize, recall, voice
+from sarvam_mcp.workflows import dub, localize, meet, recall, voice
 
-__all__ = ["dub", "localize", "recall", "voice"]
+__all__ = ["dub", "localize", "meet", "recall", "voice"]
