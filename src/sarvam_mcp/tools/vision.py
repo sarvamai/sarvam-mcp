@@ -54,10 +54,12 @@ def register(mcp: FastMCP) -> None:
             description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
         ),
         document_base64: str | None = Field(
-            default=None, description="Base64-encoded document (for remote MCP).",
+            default=None,
+            description="Base64-encoded document (for remote MCP).",
         ),
         document_url: str | None = Field(
-            default=None, description="URL to fetch the document from.",
+            default=None,
+            description="URL to fetch the document from.",
         ),
         filename: str | None = Field(
             default=None,
@@ -100,9 +102,7 @@ def register(mcp: FastMCP) -> None:
                 status = await _poll_job(ctx, sc, job_id, metrics)
                 download = None
                 if str(status.get("status", "")).lower() in {"completed", "partially_completed"}:
-                    download, call = await sc.client.get_json(
-                        f"{DOC_AI_BASE}/{job_id}/download-url"
-                    )
+                    download, call = await sc.client.get_json(f"{DOC_AI_BASE}/{job_id}/download-url")
                     metrics.merge(call)
 
         return {
@@ -132,10 +132,12 @@ def register(mcp: FastMCP) -> None:
             description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
         ),
         document_base64: str | None = Field(
-            default=None, description="Base64-encoded document (for remote MCP).",
+            default=None,
+            description="Base64-encoded document (for remote MCP).",
         ),
         document_url: str | None = Field(
-            default=None, description="URL to fetch the document from.",
+            default=None,
+            description="URL to fetch the document from.",
         ),
         filename: str | None = Field(
             default=None,
@@ -190,9 +192,7 @@ def register(mcp: FastMCP) -> None:
                     "completed",
                     "partially_completed",
                 }:
-                    results, call = await sc.client.get_json(
-                        f"{DOC_AI_BASE}/{job_id}/results"
-                    )
+                    results, call = await sc.client.get_json(f"{DOC_AI_BASE}/{job_id}/results")
                     metrics.merge(call)
 
         return {
@@ -211,22 +211,41 @@ def register(mcp: FastMCP) -> None:
             "Runtime tool — calls Sarvam API now.\n\n"
             "Poll a Document AI job at GET /doc-ai/v1/job/{job_id}/status. "
             "Works for both digitise and extract. Terminal statuses: "
-            "completed, partially_completed, failed, rejected."
+            "completed, partially_completed, failed, rejected.\n\n"
+            "Pass job_type='digitise' or job_type='extract' to automatically fetch "
+            "the job output when the job reaches a completed state. "
+            "For digitise, returns the download URL; for extract, returns structured results."
         ),
     )
     async def sarvam_vision_job_status(
         ctx: Context,
         job_id: str = Field(description="Job id from vision_digitise or vision_extract."),
+        job_type: Literal["digitise", "extract"] | None = Field(
+            default=None,
+            description="Pass 'digitise' or 'extract' to also fetch output when the job is complete.",
+        ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         with measure_tool() as metrics:
             status, call = await sc.client.get_json(f"{DOC_AI_BASE}/{job_id}/status")
             metrics.merge(call)
+            output = None
+            if job_type is not None and str(status.get("status", "")).lower() in {
+                "completed",
+                "partially_completed",
+            }:
+                if job_type == "digitise":
+                    output, call = await sc.client.get_json(f"{DOC_AI_BASE}/{job_id}/download-url")
+                    metrics.merge(call)
+                else:
+                    output, call = await sc.client.get_json(f"{DOC_AI_BASE}/{job_id}/results")
+                    metrics.merge(call)
         return {
             "job_id": job_id,
             "status": status.get("status"),
             "usage": status.get("usage"),
             "raw": status,
+            "output": output,
             "observability": metrics.to_response_block(),
         }
 
