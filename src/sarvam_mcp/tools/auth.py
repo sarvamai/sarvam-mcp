@@ -31,8 +31,7 @@ def register(mcp: FastMCP) -> None:
         api_key: str = Field(
             default="",
             description=(
-                "Your Sarvam API key (starts with sk_). "
-                "Leave empty to get instructions on where to find it."
+                "Your Sarvam API key (starts with sk_). Leave empty to get instructions on where to find it."
             ),
         ),
     ) -> dict[str, Any]:
@@ -83,6 +82,8 @@ def register(mcp: FastMCP) -> None:
 def _save_key(api_key: str) -> None:
     """Save API key to ~/.sarvam/credentials, preserving other settings."""
     CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if sys.platform != "win32":
+        os.chmod(CREDENTIALS_PATH.parent, 0o700)
 
     preserved: list[str] = []
     if CREDENTIALS_PATH.exists():
@@ -102,8 +103,15 @@ def _save_key(api_key: str) -> None:
         body += f"{line}\n"
 
     tmp = CREDENTIALS_PATH.with_suffix(".tmp")
-    tmp.write_text(body)
-    _restrict_permissions(tmp)
+    if sys.platform == "win32":
+        tmp.write_text(body)
+        _restrict_permissions(tmp)
+    else:
+        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, body.encode())
+        finally:
+            os.close(fd)
     tmp.replace(CREDENTIALS_PATH)
 
 
@@ -116,8 +124,7 @@ def _restrict_permissions(path: Path) -> None:
         username = os.environ.get("USERNAME", "")
         if username:
             subprocess.run(
-                ["icacls", str(path), "/inheritance:r",
-                 "/grant:r", f"{username}:(R,W)"],
+                ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:(R,W)"],
                 capture_output=True,
             )
     else:
