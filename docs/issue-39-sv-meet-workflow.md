@@ -119,3 +119,27 @@ from sarvam_mcp.workflows import meet
 - [ ] Manual: run `sarvam_tools_meet` with a short audio file — verify transcript, summary, action_items, decisions present in response
 
 Fixes sarvamai/sarvam-mcp#39
+
+---
+
+## PR Description (PR #97)
+
+> ## Summary
+>
+> - Adds `sarvam_tools_meet`, a new composite workflow for Indic-language meeting audio.
+> - Transcribes audio with speaker diarization using Saaras v4.
+> - Passes the transcript to Sarvam LLM to extract a summary, action items, and decisions.
+> - Returns a structured JSON response with all results plus observability metrics.
+>
+> ## Changes
+>
+> - `src/sarvam_mcp/workflows/meet.py`: new workflow module with `register(mcp)` export
+> - `src/sarvam_mcp/server.py`: registers `workflows.meet`
+>
+> ## Test plan
+>
+> - [ ] `ruff check src/` passes
+> - [ ] `pytest -q` passes
+> - [ ] Manual: run `sarvam_tools_meet` with a short audio file — verify transcript, summary, action_items, decisions are present in response
+>
+> Fixes sarvamai/sarvam-mcp#39
