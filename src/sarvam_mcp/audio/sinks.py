@@ -25,8 +25,7 @@ class StoredAudio:
 class AudioSink(Protocol):
     """Strategy for what to do with bytes emitted by a TTS/STT tool."""
 
-    async def store(self, data: bytes, *, filename: str, mime_type: str) -> StoredAudio:
-        ...
+    async def store(self, data: bytes, *, filename: str, mime_type: str) -> StoredAudio: ...
 
 
 class FileSink:
@@ -38,6 +37,9 @@ class FileSink:
     async def store(self, data: bytes, *, filename: str, mime_type: str) -> StoredAudio:
         self._base_path.mkdir(parents=True, exist_ok=True)
         path = self._base_path / filename
+        resolved = path.resolve()
+        if not resolved.is_relative_to(self._base_path.resolve()):
+            raise ValueError(f"Filename {filename!r} would escape the output directory.")
         path.write_bytes(data)
         return StoredAudio(
             file_path=str(path),
@@ -74,9 +76,7 @@ class BothSink:
 
     async def store(self, data: bytes, *, filename: str, mime_type: str) -> StoredAudio:
         file_result = await self._file_sink.store(data, filename=filename, mime_type=mime_type)
-        resource_result = await self._resource_sink.store(
-            data, filename=filename, mime_type=mime_type
-        )
+        resource_result = await self._resource_sink.store(data, filename=filename, mime_type=mime_type)
         return StoredAudio(
             file_path=file_result.file_path,
             resource_uri=resource_result.resource_uri,
