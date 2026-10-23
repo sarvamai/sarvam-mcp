@@ -429,10 +429,10 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "headroom (300+) or omit max_tokens; reasoning_effort='low' "
             "reduces but does not eliminate this. "
             "There is also a /v2/chat/completions endpoint (glm5.3, gemma4, "
-            "deepseekv4-flash open-weight models) — confirmed to require beta "
-            "whitelisting from Sarvam, so most subscription keys can't call it "
-            "yet; not implemented here for that reason. Ask Sarvam for beta "
-            "access before building against it."
+            "deepseekv4.1-flash open-weight models). These were marked GA on "
+            "2026-10-22 — they no longer require beta whitelisting and are "
+            "available to standard subscription keys. Not yet wired up as an "
+            "MCP tool here; call /v2/chat/completions directly for now."
         ),
     },
     "/doc-ai/v1/job/digitise": {
