@@ -428,11 +428,13 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "whole budget was consumed by hidden reasoning. Give it real "
             "headroom (300+) or omit max_tokens; reasoning_effort='low' "
             "reduces but does not eliminate this. "
-            "There is also a /v2/chat/completions endpoint (glm5.3, gemma4, "
-            "deepseekv4-flash open-weight models) — confirmed to require beta "
-            "whitelisting from Sarvam, so most subscription keys can't call it "
-            "yet; not implemented here for that reason. Ask Sarvam for beta "
-            "access before building against it."
+            "There is also a /v2/chat/completions endpoint. Generally available "
+            "open-weight models (per docs.sarvam.ai pricing, 2026-10-23): glm5.3, "
+            "gemma4, deepseekv4.1-flash. Beta open-weight models: deepseekv4-pro, "
+            "kimi-k3, mimo-v2.6-flash, mimo-v2.6-pro. The beta models still need "
+            "whitelisting from Sarvam, so most subscription keys can't call them "
+            "yet; not implemented here for that reason. Ask Sarvam for beta access "
+            "before building against the beta models."
         ),
     },
     "/doc-ai/v1/job/digitise": {
@@ -562,7 +564,7 @@ PRICING: dict[str, dict[str, Any]] = {
     "saaras:v3":            {"unit": "per minute of audio",   "tier": "billed by minute"},
     "saaras:v3-realtime":   {"unit": "per minute of audio",   "tier": "billed by minute"},
     "bulbul:v3":            {"unit": "per character",         "tier": "billed by character"},
-    "bulbul:v4-flash":      {"unit": "per character",         "tier": "billed by character (assumed same unit as bulbul:v3 — docs.sarvam.ai doesn't publish a v4-flash rate yet; confirm on dashboard.sarvam.ai)"},
+    "bulbul:v4-flash":      {"unit": "per character",         "tier": "billed by character — ₹1.00 per 1K characters (pay as you go), ₹0.925 (Pro), ₹0.85 (Growth); per docs.sarvam.ai pricing, 2026-10-23. GA."},
     "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
     "sarvam-translate:v1":  {"unit": "per character",         "tier": "billed by character"},
     "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},
