@@ -43,7 +43,7 @@ def register(mcp: FastMCP) -> None:
             "Full-document OCR that keeps layout, reading order, and tables. "
             "Output is markdown (`md`), HTML, or JSON.\n\n"
             "Uploads the file, polls until a terminal status, and returns the "
-            "download URL. Max 10 pages. Use `language` (not language_code). "
+            "download URL. Max 30 pages. Use `language` (not language_code). "
             "Pass `md`, not `markdown`."
         ),
     )
@@ -51,7 +51,7 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         document_path: str | None = Field(
             default=None,
-            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
+            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 30 pages.",
         ),
         document_base64: str | None = Field(
             default=None, description="Base64-encoded document (for remote MCP).",
@@ -129,7 +129,7 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         document_path: str | None = Field(
             default=None,
-            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
+            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 20 pages.",
         ),
         document_base64: str | None = Field(
             default=None, description="Base64-encoded document (for remote MCP).",
