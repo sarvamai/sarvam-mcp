@@ -452,7 +452,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "notes": (
             "Full-document OCR. Poll GET /doc-ai/v1/job/{job_id}/status, then "
-            "GET /doc-ai/v1/job/{job_id}/download-url. Max 10 pages."
+            "GET /doc-ai/v1/job/{job_id}/download-url. Max 30 pages."
         ),
     },
     "/doc-ai/v1/job/extract": {
@@ -467,7 +467,10 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "output_format": "str — json | csv | xlsx",
         },
         "response": {"job_id": "str", "status": "str"},
-        "notes": "Schema extraction. Poll status, then GET /doc-ai/v1/job/{job_id}/results.",
+        "notes": (
+            "Schema extraction. Poll status, then GET /doc-ai/v1/job/{job_id}/results. "
+            "Max 20 pages."
+        ),
     },
     "/translate/document/jobs": {
         "method": "POST",
