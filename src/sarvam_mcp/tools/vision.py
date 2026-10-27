@@ -43,7 +43,7 @@ def register(mcp: FastMCP) -> None:
             "Full-document OCR that keeps layout, reading order, and tables. "
             "Output is markdown (`md`), HTML, or JSON.\n\n"
             "Uploads the file, polls until a terminal status, and returns the "
-            "download URL. Max 10 pages. Use `language` (not language_code). "
+            "download URL. Max 30 pages per PDF. Use `language` (not language_code). "
             "Pass `md`, not `markdown`."
         ),
     )
@@ -51,7 +51,7 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         document_path: str | None = Field(
             default=None,
-            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
+            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 30 pages per PDF.",
         ),
         document_base64: str | None = Field(
             default=None, description="Base64-encoded document (for remote MCP).",
@@ -129,7 +129,7 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         document_path: str | None = Field(
             default=None,
-            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
+            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 20 pages per PDF.",
         ),
         document_base64: str | None = Field(
             default=None, description="Base64-encoded document (for remote MCP).",
@@ -262,6 +262,10 @@ def _guess_doc_mime(path: Path) -> str:
         "zip": "application/zip",
         "html": "text/html",
         "htm": "text/html",
+        # Document Translation accepts Markdown and plain text (UTF-8, 2 MB cap).
+        "md": "text/markdown",
+        "markdown": "text/markdown",
+        "txt": "text/plain",
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
