@@ -38,7 +38,8 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_tools_document_translate",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Translate a whole document (PDF, Word, Excel, PowerPoint, HTML) "
+            "Translate a whole document (PDF, Word, Excel, PowerPoint, HTML, "
+            "Markdown, plain text) "
             "via POST /translate/document/jobs. Layout is preserved. "
             "Up to 12 target languages.\n\n"
             "Creates the job, uploads the file to the signed URL, and starts it. "
