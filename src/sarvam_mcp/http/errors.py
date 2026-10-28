@@ -32,6 +32,15 @@ class SarvamRateLimitError(SarvamAPIError):
         self.retry_after = retry_after
 
 
+class SarvamCreditsExhaustedError(SarvamAPIError):
+    """402 — the account's credit balance is empty.
+
+    Not a rate limit: waiting and retrying will not clear it. The user has to
+    add credits in the Sarvam dashboard (Settings -> Billing), after which the
+    same API key works again immediately.
+    """
+
+
 class SarvamBadRequestError(SarvamAPIError):
     """400 — caller-side validation problem."""
 

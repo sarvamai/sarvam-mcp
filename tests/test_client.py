@@ -11,6 +11,7 @@ from sarvam_mcp.http import (
     SarvamAuthError,
     SarvamClient,
     SarvamConnectionError,
+    SarvamCreditsExhaustedError,
     SarvamRateLimitError,
 )
 from sarvam_mcp.http.errors import SarvamBadRequestError
@@ -78,6 +79,24 @@ async def test_429_maps_to_rate_limit_with_retry_after(client, httpx_mock):
     with pytest.raises(SarvamRateLimitError) as exc_info:
         await client.post_json("/translate", json_body={"input": "x"})
     assert exc_info.value.retry_after == 12.5
+
+
+async def test_402_maps_to_credits_exhausted_error(client, httpx_mock):
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.sarvam.ai/translate",
+        status_code=402,
+        json={
+            "error": {
+                "code": "insufficient_quota_error",
+                "message": "No credits available.",
+            }
+        },
+    )
+    with pytest.raises(SarvamCreditsExhaustedError) as exc_info:
+        await client.post_json("/translate", json_body={"input": "x"})
+    assert exc_info.value.status_code == 402
+    assert "No credits available" in str(exc_info.value)
 
 
 async def test_400_maps_to_bad_request(client, httpx_mock):
