@@ -91,8 +91,10 @@ All defaults below reflect the latest non-deprecated models.
 | `sarvam_identify_language` | Language + script detect | — |
 | `sarvam_text_analytics` | Typed Q&A over text | — |
 | `sarvam_llm_complete` | Chat completions | `sarvam-105b` |
-| `sarvam_vision_digitise` | Document OCR to markdown, HTML, or JSON | Sarvam Vision |
+| `sarvam_vision_parse` | Document OCR to markdown, HTML, or JSON | Sarvam Vision |
 | `sarvam_vision_extract` | Schema extraction from a document | Sarvam Vision |
+| `sarvam_vision_classify` | Label a document, or each page, against your categories | Sarvam Vision |
+| `sarvam_vision_split` | Split a bundle of pages into separate documents | Sarvam Vision |
 | `sarvam_vision_job_status` | Poll a Document AI job | — |
 | `sarvam_dubbing_submit` | Official video/audio dubbing job | — |
 | `sarvam_pronunciation_list` | List pronunciation dictionaries | — |

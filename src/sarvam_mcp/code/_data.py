@@ -435,7 +435,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "access before building against it."
         ),
     },
-    "/doc-ai/v1/job/digitise": {
+    "/doc-ai/v1/job/parse": {
         "method": "POST",
         "model": "sarvam-vision",
         "content_type": "multipart/form-data",
@@ -451,7 +451,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "status": "str — pending, then completed | partially_completed | failed | rejected",
         },
         "notes": (
-            "Full-document OCR. Poll GET /doc-ai/v1/job/{job_id}/status, then "
+            "Full-document parse (OCR). Poll GET /doc-ai/v1/job/{job_id}/status, then "
             "GET /doc-ai/v1/job/{job_id}/download-url. Max 10 pages."
         ),
     },
@@ -468,6 +468,50 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "response": {"job_id": "str", "status": "str"},
         "notes": "Schema extraction. Poll status, then GET /doc-ai/v1/job/{job_id}/results.",
+    },
+    "/doc-ai/v1/job/classify": {
+        "method": "POST",
+        "model": "sarvam-vision",
+        "content_type": "multipart/form-data",
+        "request_body": {
+            "file":        "binary, required (or upload_ids). PDF, PNG, JPEG or TIFF; repeat for up to 10 documents",
+            "request":     "JSON part (application/json) — see below",
+            "request.config.scope":      "str — document (default) | page",
+            "request.config.categories": "list of {type, description}, max 20. Omit to get a suggested type",
+            "request.config.unmatched_behavior": "str — suggest_type (default) | other",
+            "request.language":          "str — BCP-47, e.g. en-IN",
+            "request.execution":         "'auto' — wait briefly and return results with HTTP 200 for a single document",
+        },
+        "response": {"job_id": "str", "status": "str — accepted", "status_url": "str", "results_url": "str"},
+        "notes": (
+            "Labels a document, or each page, against your categories. Poll "
+            "GET /doc-ai/v1/job/{job_id}/status until completed, then GET "
+            "/doc-ai/v1/job/{job_id}/results (add ?include=details for evidence). "
+            "Check review_required; confidence can be null. A bundle of several "
+            "documents returns classification_status 'mixed' — split it first."
+        ),
+    },
+    "/doc-ai/v1/job/split": {
+        "method": "POST",
+        "model": "sarvam-vision",
+        "content_type": "multipart/form-data",
+        "request_body": {
+            "file":    "binary, required (or upload_ids). PDF, PNG, JPEG or TIFF",
+            "request": "JSON part (application/json) — see below",
+            "request.config.method": "str — semantic (default) | fixed_pages | page_ranges | triggers",
+            "request.config.pages_per_segment": "int — fixed_pages",
+            "request.config.segment_ranges":    "list of {start, end}, 1-based inclusive — page_ranges",
+            "request.config.split_on":          "list of markers {type: qr_code|barcode|blank_page|text|photo, match, ...} — triggers",
+            "request.config.classify_segments": "bool, default true. Send categories when true, omit them when false",
+            "request.config.categories":        "list of {type, description}",
+        },
+        "response": {"job_id": "str", "status": "str — accepted", "status_url": "str", "results_url": "str"},
+        "notes": (
+            "Splits a bundle into child documents, each with original page numbers and a "
+            "document_ref. Poll status, then GET /doc-ai/v1/job/{job_id}/results. "
+            "'completed' does not mean every segment passed review — check each "
+            "segment's review_required."
+        ),
     },
     "/translate/document/jobs": {
         "method": "POST",

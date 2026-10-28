@@ -1,11 +1,11 @@
-"""Sarvam Vision — Document AI digitise and schema extract.
+"""Sarvam Vision — Document AI parse, schema extract, classify and split.
 
-Both jobs are asynchronous:
+All jobs are asynchronous:
 
-  POST /doc-ai/v1/job/digitise   or   POST /doc-ai/v1/job/extract
+  POST /doc-ai/v1/job/parse | extract | classify | split
   GET  /doc-ai/v1/job/{job_id}/status
-  GET  /doc-ai/v1/job/{job_id}/download-url   (digitise)
-  GET  /doc-ai/v1/job/{job_id}/results        (extract)
+  GET  /doc-ai/v1/job/{job_id}/download-url   (parse)
+  GET  /doc-ai/v1/job/{job_id}/results        (extract, classify, split)
 """
 
 from __future__ import annotations
@@ -22,11 +22,14 @@ from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import ready_ctx, resolve_file_input
 
 DOC_AI_BASE = "/doc-ai/v1/job"
-DIGITISE_PATH = f"{DOC_AI_BASE}/digitise"
+PARSE_PATH = f"{DOC_AI_BASE}/parse"
 EXTRACT_PATH = f"{DOC_AI_BASE}/extract"
+CLASSIFY_PATH = f"{DOC_AI_BASE}/classify"
+SPLIT_PATH = f"{DOC_AI_BASE}/split"
 
-DigitiseFormat = Literal["md", "html", "json"]
+ParseFormat = Literal["md", "html", "json"]
 ExtractFormat = Literal["json", "csv", "xlsx"]
+SplitMethod = Literal["semantic", "fixed_pages", "page_ranges", "triggers"]
 DocumentContent = Literal["printed", "handwritten", "mixed"]
 
 TERMINAL = {"completed", "partially_completed", "failed", "rejected"}
@@ -36,10 +39,10 @@ POLL_INTERVAL_SECONDS = 5
 
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
-        name="sarvam_tools_vision_digitise",
+        name="sarvam_tools_vision_parse",
         description=(
             "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
-            "Digitise a document with Sarvam Vision (POST /doc-ai/v1/job/digitise). "
+            "Parse a document with Sarvam Vision (POST /doc-ai/v1/job/parse). "
             "Full-document OCR that keeps layout, reading order, and tables. "
             "Output is markdown (`md`), HTML, or JSON.\n\n"
             "Uploads the file, polls until a terminal status, and returns the "
@@ -47,7 +50,7 @@ def register(mcp: FastMCP) -> None:
             "Pass `md`, not `markdown`."
         ),
     )
-    async def sarvam_vision_digitise(
+    async def sarvam_vision_parse(
         ctx: Context,
         document_path: str | None = Field(
             default=None,
@@ -63,7 +66,7 @@ def register(mcp: FastMCP) -> None:
             default=None,
             description="Filename with extension. Required for base64 or URL inputs.",
         ),
-        output_format: DigitiseFormat = Field(
+        output_format: ParseFormat = Field(
             default="md",
             description="'md', 'html', or 'json'. Do not pass 'markdown'.",
         ),
@@ -86,7 +89,7 @@ def register(mcp: FastMCP) -> None:
             with measure_tool() as metrics:
                 with path.open("rb") as fh:
                     created, call = await sc.client.post_multipart(
-                        DIGITISE_PATH,
+                        PARSE_PATH,
                         data={
                             "language": language,
                             "output_format": output_format,
@@ -122,7 +125,7 @@ def register(mcp: FastMCP) -> None:
             "Pass a JSON schema (root type object, every field needs type and description) "
             "or a saved `config_id`. Returns structured fields from "
             "GET /doc-ai/v1/job/{job_id}/results.\n\n"
-            "For full-document OCR to markdown or HTML, use sarvam_tools_vision_digitise."
+            "For full-document OCR to markdown or HTML, use sarvam_tools_vision_parse."
         ),
     )
     async def sarvam_vision_extract(
@@ -206,17 +209,205 @@ def register(mcp: FastMCP) -> None:
         }
 
     @mcp.tool(
+        name="sarvam_tools_vision_classify",
+        description=(
+            "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
+            "Classify a document with Sarvam Vision (POST /doc-ai/v1/job/classify). "
+            "Labels the whole document, or each page with scope='page', against the "
+            "`categories` you define (each needs `type` and `description`). Omit "
+            "categories to get a suggested document type.\n\n"
+            "Uploads the file, polls until a terminal status, and returns the result "
+            "from GET /doc-ai/v1/job/{job_id}/results. A bundle of several documents "
+            "comes back as classification_status='mixed' — use sarvam_tools_vision_split "
+            "for those. Check `review_required` before trusting a label; `confidence` "
+            "can be null."
+        ),
+    )
+    async def sarvam_vision_classify(
+        ctx: Context,
+        document_path: str | None = Field(
+            default=None,
+            description="Local path to a PDF, PNG, JPEG, or TIFF.",
+        ),
+        document_base64: str | None = Field(
+            default=None, description="Base64-encoded document (for remote MCP).",
+        ),
+        document_url: str | None = Field(
+            default=None, description="URL to fetch the document from.",
+        ),
+        filename: str | None = Field(
+            default=None,
+            description="Filename with extension. Required for base64 or URL inputs.",
+        ),
+        categories: list[dict[str, str]] | None = Field(
+            default=None,
+            description=(
+                "Up to 20 categories, e.g. [{'type': 'invoice', 'description': "
+                "'A supplier bill with totals'}]. Names must be unique. Clear "
+                "descriptions improve accuracy. Omit to get a suggested type."
+            ),
+        ),
+        scope: Literal["document", "page"] = Field(
+            default="document",
+            description="'document' gives one decision for the file; 'page' gives one per page.",
+        ),
+        unmatched_behavior: Literal["suggest_type", "other"] | None = Field(
+            default=None,
+            description=(
+                "When no category matches: 'suggest_type' returns a suggested_type "
+                "(API default), 'other' returns type 'other'."
+            ),
+        ),
+        max_pages: int | None = Field(
+            default=None, ge=1, description="Inspect only the first N pages.",
+        ),
+        language: str | None = Field(
+            default=None,
+            description="BCP-47 document language, e.g. 'hi-IN'. Omit for the Indic OCR default.",
+        ),
+        include_details: bool = Field(
+            default=False,
+            description="Add inspected pages, provenance and evidence to the result.",
+        ),
+    ) -> dict[str, Any]:
+        sc = await ready_ctx(ctx)
+        config: dict[str, Any] = {"scope": scope}
+        if categories:
+            config["categories"] = categories
+        if unmatched_behavior:
+            config["unmatched_behavior"] = unmatched_behavior
+        if max_pages:
+            config["max_pages"] = max_pages
+        request: dict[str, Any] = {"config": config}
+        if language:
+            request["language"] = language
+        return await _run_results_job(
+            ctx,
+            sc,
+            CLASSIFY_PATH,
+            request,
+            document_path=document_path,
+            document_base64=document_base64,
+            document_url=document_url,
+            filename=filename,
+            include_details=include_details,
+        )
+
+    @mcp.tool(
+        name="sarvam_tools_vision_split",
+        description=(
+            "Runtime tool — calls Sarvam API now. For code-writing help, use sarvam_code_* tools.\n\n"
+            "Split a bundle of pages into separate child documents with Sarvam Vision "
+            "(POST /doc-ai/v1/job/split). Each segment keeps its original page numbers "
+            "and a `document_ref`.\n\n"
+            "Methods: 'semantic' (model finds boundaries, default), 'fixed_pages' "
+            "(needs pages_per_segment), 'page_ranges' (needs segment_ranges), "
+            "'triggers' (needs split_on markers: qr_code, barcode, blank_page, text, photo). "
+            "Pass `categories` to also label each segment.\n\n"
+            "Uploads the file, polls until a terminal status, and returns the result "
+            "from GET /doc-ai/v1/job/{job_id}/results. `completed` means processing "
+            "finished, not that every segment passed review — check each segment's "
+            "review_required."
+        ),
+    )
+    async def sarvam_vision_split(
+        ctx: Context,
+        document_path: str | None = Field(
+            default=None,
+            description="Local path to a PDF, PNG, JPEG, or TIFF.",
+        ),
+        document_base64: str | None = Field(
+            default=None, description="Base64-encoded document (for remote MCP).",
+        ),
+        document_url: str | None = Field(
+            default=None, description="URL to fetch the document from.",
+        ),
+        filename: str | None = Field(
+            default=None,
+            description="Filename with extension. Required for base64 or URL inputs.",
+        ),
+        method: SplitMethod = Field(
+            default="semantic",
+            description="'semantic', 'fixed_pages', 'page_ranges' or 'triggers'.",
+        ),
+        pages_per_segment: int | None = Field(
+            default=None, ge=1, description="Pages per document. Required for 'fixed_pages'.",
+        ),
+        segment_ranges: list[dict[str, int]] | None = Field(
+            default=None,
+            description=(
+                "Inclusive 1-based ranges covering the pages exactly once, in order, e.g. "
+                "[{'start': 1, 'end': 2}, {'start': 3, 'end': 4}]. Required for 'page_ranges'."
+            ),
+        ),
+        split_on: list[dict[str, Any]] | None = Field(
+            default=None,
+            description=(
+                "Markers that start a new document. Required for 'triggers'. Each has a "
+                "`type` (qr_code, barcode, blank_page, text, photo) and optional `match` "
+                "(exactly one of equals, prefix, regex), `where`, `split_when`, "
+                "`trigger_page`, `formats`; `photo` needs `description`. "
+                "e.g. [{'type': 'text', 'match': {'prefix': 'INVOICE'}}]."
+            ),
+        ),
+        categories: list[dict[str, str]] | None = Field(
+            default=None,
+            description=(
+                "Categories to label each segment with, each with `type` and "
+                "`description`. Omit to leave segments unlabelled."
+            ),
+        ),
+        language: str | None = Field(
+            default=None, description="BCP-47 document language, e.g. 'hi-IN'.",
+        ),
+        include_details: bool = Field(
+            default=False,
+            description="Add inspected pages, provenance and boundary details to the result.",
+        ),
+    ) -> dict[str, Any]:
+        sc = await ready_ctx(ctx)
+        if method == "fixed_pages" and not pages_per_segment:
+            raise ValueError("method='fixed_pages' needs pages_per_segment.")
+        if method == "page_ranges" and not segment_ranges:
+            raise ValueError("method='page_ranges' needs segment_ranges.")
+        if method == "triggers" and not split_on:
+            raise ValueError("method='triggers' needs split_on.")
+        config: dict[str, Any] = {"method": method, "classify_segments": bool(categories)}
+        if categories:
+            config["categories"] = categories
+        if pages_per_segment:
+            config["pages_per_segment"] = pages_per_segment
+        if segment_ranges:
+            config["segment_ranges"] = segment_ranges
+        if split_on:
+            config["split_on"] = split_on
+        request: dict[str, Any] = {"config": config}
+        if language:
+            request["language"] = language
+        return await _run_results_job(
+            ctx,
+            sc,
+            SPLIT_PATH,
+            request,
+            document_path=document_path,
+            document_base64=document_base64,
+            document_url=document_url,
+            filename=filename,
+            include_details=include_details,
+        )
+
+    @mcp.tool(
         name="sarvam_tools_vision_job_status",
         description=(
             "Runtime tool — calls Sarvam API now.\n\n"
             "Poll a Document AI job at GET /doc-ai/v1/job/{job_id}/status. "
-            "Works for both digitise and extract. Terminal statuses: "
+            "Works for parse, extract, classify and split jobs. Terminal statuses: "
             "completed, partially_completed, failed, rejected."
         ),
     )
     async def sarvam_vision_job_status(
         ctx: Context,
-        job_id: str = Field(description="Job id from vision_digitise or vision_extract."),
+        job_id: str = Field(description="Job id from a vision parse, extract, classify or split call."),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         with measure_tool() as metrics:
@@ -229,6 +420,58 @@ def register(mcp: FastMCP) -> None:
             "raw": status,
             "observability": metrics.to_response_block(),
         }
+
+
+async def _run_results_job(
+    ctx: Context,
+    sc: Any,
+    path: str,
+    request: dict[str, Any],
+    *,
+    document_path: str | None,
+    document_base64: str | None,
+    document_url: str | None,
+    filename: str | None,
+    include_details: bool,
+) -> dict[str, Any]:
+    """Submit a classify/split job (multipart `file` + JSON `request`), poll, fetch results."""
+    async with resolve_file_input(
+        file_path=document_path,
+        file_base64=document_base64,
+        file_url=document_url,
+        filename=filename,
+    ) as doc:
+        with measure_tool() as metrics:
+            with doc.open("rb") as fh:
+                created, call = await sc.client.post_multipart(
+                    path,
+                    files={
+                        "file": (doc.name, fh, _guess_doc_mime(doc)),
+                        "request": (None, json.dumps(request), "application/json"),
+                    },
+                )
+            metrics.merge(call)
+            job_id = created["job_id"]
+            status = await _poll_job(ctx, sc, job_id, metrics)
+            results = None
+            if str(status.get("status", "")).lower() in {"completed", "partially_completed"}:
+                results, call = await sc.client.get_json(
+                    f"{DOC_AI_BASE}/{job_id}/results",
+                    params={"include": "details"} if include_details else None,
+                )
+                metrics.merge(call)
+
+    body = results if isinstance(results, dict) else {}
+    result = body.get("result")
+    return {
+        "job_id": job_id,
+        "status": status.get("status"),
+        "usage": status.get("usage"),
+        "review_required": result.get("review_required") if isinstance(result, dict) else None,
+        "result": result,
+        "raw": results,
+        "observability": metrics.to_response_block(),
+    }
 
 
 async def _poll_job(ctx: Context, sc: Any, job_id: str, metrics: Any) -> dict[str, Any]:
