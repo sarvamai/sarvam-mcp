@@ -244,12 +244,34 @@ def _recommend(task: str) -> dict[str, Any]:
             snippet_key=("llm", "python"),
         )
 
+    # ---- document classify / split
+    if re.search(r"\b(classify|classification|categorize|categorise|document type)\b", t) and re.search(
+        r"\b(document|pdf|page|pages|invoice|receipt|scan)\b", t
+    ):
+        return _result(
+            model="sarvam-vision",
+            endpoint="/doc-ai/v1/job/classify",
+            why="Document AI classify — label a document, or each page, against categories you define.",
+            language_code=detected_lang,
+            snippet_key=None,
+            extras={"note": "Send file plus a JSON `request` with config.categories. Poll /doc-ai/v1/job/{job_id}/status, then /results. Check review_required."},
+        )
+    if re.search(r"\b(split|separate|segment)\b", t) and re.search(r"\b(document|documents|pdf|pages|bundle|scan)\b", t):
+        return _result(
+            model="sarvam-vision",
+            endpoint="/doc-ai/v1/job/split",
+            why="Document AI split — divide a bundle of pages into separate child documents.",
+            language_code=detected_lang,
+            snippet_key=None,
+            extras={"note": "Methods: semantic, fixed_pages, page_ranges, triggers. Poll /doc-ai/v1/job/{job_id}/status, then /results."},
+        )
+
     # ---- vision / OCR / document
     if re.search(r"\b(ocr|document|pdf|image|extract text|scan|invoice|receipt)\b", t):
         return _result(
             model="sarvam-vision",
-            endpoint="/doc-ai/v1/job/digitise",
-            why="Document AI digitise — full-document OCR to markdown, HTML, or JSON. Schema fields use /doc-ai/v1/job/extract.",
+            endpoint="/doc-ai/v1/job/parse",
+            why="Document AI parse — full-document OCR to markdown, HTML, or JSON. Schema fields use /doc-ai/v1/job/extract.",
             language_code=detected_lang,
             snippet_key=None,
             extras={"note": "Poll /doc-ai/v1/job/{job_id}/status. Max 10 pages. Pass output_format md, not markdown."},
