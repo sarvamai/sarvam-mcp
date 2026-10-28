@@ -21,6 +21,7 @@ from sarvam_mcp.http.errors import (
     SarvamAuthError,
     SarvamBadRequestError,
     SarvamConnectionError,
+    SarvamCreditsExhaustedError,
     SarvamRateLimitError,
 )
 from sarvam_mcp.http.retry import retry_async
@@ -256,6 +257,8 @@ class SarvamClient:
             raise SarvamAuthError(message, **kwargs)
         if response.status_code == 400:
             raise SarvamBadRequestError(message, **kwargs)
+        if response.status_code == 402:
+            raise SarvamCreditsExhaustedError(message, **kwargs)
         if response.status_code == 429:
             retry_after = _maybe_float(response.headers.get("retry-after"))
             raise SarvamRateLimitError(message, retry_after=retry_after, **kwargs)
