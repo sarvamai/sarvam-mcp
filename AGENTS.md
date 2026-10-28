@@ -11,6 +11,7 @@ Use when the user needs to set or update their API key:
 - If any tool returns an auth error, call `sarvam_tools_set_api_key` — it will direct the user to the dashboard and accept their pasted key.
 - The key is saved globally to `~/.sarvam/credentials` so it persists across sessions.
 - Same tool handles first-time setup and key rotation.
+- If a tool returns a credits-exhausted error (HTTP `402`, `insufficient_quota_error`), tell the user their credit balance is empty and to add credits on the Sarvam dashboard's Billing page. Do not retry — a 402 clears only when credits are added, unlike a 429.
 
 ### `sarvam_tools_*` — Runtime (do the thing NOW)
 
