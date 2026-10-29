@@ -24,7 +24,8 @@ from sarvam_mcp.tools._uploads import presigned_put_headers
 from sarvam_mcp.tools.vision import _guess_doc_mime
 
 DUBBING_BASE = "/dubbing/jobs"
-ExportOption = Literal["video", "audio", "mp3", "srt"]
+ExportOption = Literal["video", "audio", "audio_vocals", "srt", "vtt", "mp3"]
+ModelTier = Literal["plus", "lite", "auto"]
 PacePreset = Literal["slow", "moderate", "normal", "fast"]
 Register = Literal[
     "formal",
@@ -68,7 +69,7 @@ def register(mcp: FastMCP) -> None:
         target_langs: list[str] = Field(description="One or more target BCP-47 codes."),
         export_options: list[ExportOption] | None = Field(
             default=None,
-            description="Formats to export: video, audio, mp3, srt.",
+            description="Formats to export: video, audio, audio_vocals, srt, vtt. Omitting this exports only the dubbed video.",
         ),
         voice_cloning: bool = Field(default=True),
         voice_id: str | None = Field(
@@ -78,6 +79,10 @@ def register(mcp: FastMCP) -> None:
         pace_preset: PacePreset = Field(default="normal"),
         num_speakers: int = Field(default=1, ge=1),
         register: Register = Field(default="auto"),
+        model_tier: ModelTier = Field(
+            default="auto",
+            description="Translation model tier: plus (highest quality), lite (faster, lighter), auto (balances the two).",
+        ),
         job_name: str | None = Field(default=None),
         disable_watermark: bool = Field(default=False),
     ) -> dict[str, Any]:
@@ -95,6 +100,7 @@ def register(mcp: FastMCP) -> None:
             "pace_preset": pace_preset,
             "num_speakers": num_speakers,
             "register": register,
+            "model_tier": model_tier,
             "disable_watermark": disable_watermark,
             "editor_flow": False,
             "job_name": job_name or path.name,
@@ -139,7 +145,7 @@ def register(mcp: FastMCP) -> None:
             "Runtime tool — calls Sarvam API now.\n\n"
             "Poll a dubbing job. live-status reports pipeline progress. "
             "export-status returns signed download URLs per language and format "
-            "(video, audio, mp3, srt). URLs last about 24 hours."
+            "(video, audio, audio_vocals, srt, vtt). URLs last about 24 hours."
         ),
     )
     async def sarvam_dubbing_status(
