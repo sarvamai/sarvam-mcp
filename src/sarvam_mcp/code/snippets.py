@@ -274,7 +274,7 @@ def _recommend(task: str) -> dict[str, Any]:
             why="Document AI parse — full-document OCR to markdown, HTML, or JSON. Schema fields use /doc-ai/v1/job/extract.",
             language_code=detected_lang,
             snippet_key=None,
-            extras={"note": "Poll /doc-ai/v1/job/{job_id}/status. Max 10 pages. Pass output_format md, not markdown."},
+            extras={"note": "Poll /doc-ai/v1/job/{job_id}/status. Up to 30 pages per PDF, 200 MB. Pass output_format md, not markdown."},
         )
 
     # ---- language detection
