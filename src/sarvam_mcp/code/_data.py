@@ -452,7 +452,8 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         },
         "notes": (
             "Full-document parse (OCR). Poll GET /doc-ai/v1/job/{job_id}/status, then "
-            "GET /doc-ai/v1/job/{job_id}/download-url. Max 10 pages."
+            "GET /doc-ai/v1/job/{job_id}/download-url. "
+            "Limits: 30 pages per PDF, 30 images per ZIP, 200 MB."
         ),
     },
     "/doc-ai/v1/job/extract": {
@@ -467,7 +468,10 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "output_format": "str — json | csv | xlsx",
         },
         "response": {"job_id": "str", "status": "str"},
-        "notes": "Schema extraction. Poll status, then GET /doc-ai/v1/job/{job_id}/results.",
+        "notes": (
+            "Schema extraction. Poll status, then GET /doc-ai/v1/job/{job_id}/results. "
+            "Limits: 20 pages per PDF, 20 images per ZIP, 200 MB."
+        ),
     },
     "/doc-ai/v1/job/classify": {
         "method": "POST",
@@ -488,7 +492,9 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "GET /doc-ai/v1/job/{job_id}/status until completed, then GET "
             "/doc-ai/v1/job/{job_id}/results (add ?include=details for evidence). "
             "Check review_required; confidence can be null. A bundle of several "
-            "documents returns classification_status 'mixed' — split it first."
+            "documents returns classification_status 'mixed' — split it first. "
+            "Limits: 500 pages, 10 documents per request, 20 categories, "
+            "1,000 segments, 512 MB per document."
         ),
     },
     "/doc-ai/v1/job/split": {
@@ -510,7 +516,9 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "Splits a bundle into child documents, each with original page numbers and a "
             "document_ref. Poll status, then GET /doc-ai/v1/job/{job_id}/results. "
             "'completed' does not mean every segment passed review — check each "
-            "segment's review_required."
+            "segment's review_required. "
+            "Limits: 500 pages, 10 documents per request, 20 categories, "
+            "1,000 segments, 512 MB per document."
         ),
     },
     "/translate/document/jobs": {

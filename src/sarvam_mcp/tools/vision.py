@@ -46,7 +46,8 @@ def register(mcp: FastMCP) -> None:
             "Full-document OCR that keeps layout, reading order, and tables. "
             "Output is markdown (`md`), HTML, or JSON.\n\n"
             "Uploads the file, polls until a terminal status, and returns the "
-            "download URL. Max 10 pages. Use `language` (not language_code). "
+            "download URL. Limits: 30 pages per PDF, 30 images per ZIP, 200 MB. "
+            "Use `language` (not language_code). "
             "Pass `md`, not `markdown`."
         ),
     )
@@ -54,7 +55,7 @@ def register(mcp: FastMCP) -> None:
         ctx: Context,
         document_path: str | None = Field(
             default=None,
-            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
+            description="Local path to a PDF, PNG, JPEG, or ZIP. Up to 30 pages per PDF, 200 MB.",
         ),
         document_base64: str | None = Field(
             default=None, description="Base64-encoded document (for remote MCP).",
@@ -125,14 +126,15 @@ def register(mcp: FastMCP) -> None:
             "Pass a JSON schema (root type object, every field needs type and description) "
             "or a saved `config_id`. Returns structured fields from "
             "GET /doc-ai/v1/job/{job_id}/results.\n\n"
-            "For full-document OCR to markdown or HTML, use sarvam_tools_vision_parse."
+            "For full-document OCR to markdown or HTML, use sarvam_tools_vision_parse.\n\n"
+            "Limits: 20 pages per PDF, 20 images per ZIP, 200 MB."
         ),
     )
     async def sarvam_vision_extract(
         ctx: Context,
         document_path: str | None = Field(
             default=None,
-            description="Local path to a PDF, PNG, JPEG, or ZIP. Max 10 pages.",
+            description="Local path to a PDF, PNG, JPEG, or ZIP. Up to 20 pages per PDF, 200 MB.",
         ),
         document_base64: str | None = Field(
             default=None, description="Base64-encoded document (for remote MCP).",
@@ -220,7 +222,9 @@ def register(mcp: FastMCP) -> None:
             "from GET /doc-ai/v1/job/{job_id}/results. A bundle of several documents "
             "comes back as classification_status='mixed' — use sarvam_tools_vision_split "
             "for those. Check `review_required` before trusting a label; `confidence` "
-            "can be null."
+            "can be null.\n\n"
+            "Limits: 500 pages, 10 documents per request, 20 categories, "
+            "1,000 segments, 512 MB per document."
         ),
     )
     async def sarvam_vision_classify(
@@ -307,7 +311,9 @@ def register(mcp: FastMCP) -> None:
             "Uploads the file, polls until a terminal status, and returns the result "
             "from GET /doc-ai/v1/job/{job_id}/results. `completed` means processing "
             "finished, not that every segment passed review — check each segment's "
-            "review_required."
+            "review_required.\n\n"
+            "Limits: 500 pages, 10 documents per request, 20 categories, "
+            "1,000 segments, 512 MB per document."
         ),
     )
     async def sarvam_vision_split(
