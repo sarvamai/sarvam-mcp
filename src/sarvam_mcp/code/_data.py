@@ -428,11 +428,11 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "whole budget was consumed by hidden reasoning. Give it real "
             "headroom (300+) or omit max_tokens; reasoning_effort='low' "
             "reduces but does not eliminate this. "
-            "There is also a /v2/chat/completions endpoint (glm5.3, gemma4, "
-            "deepseekv4-flash open-weight models) — confirmed to require beta "
-            "whitelisting from Sarvam, so most subscription keys can't call it "
-            "yet; not implemented here for that reason. Ask Sarvam for beta "
-            "access before building against it."
+            "There is also a /v2/chat/completions endpoint (glm5.3, "
+            "glm5.3-flash, gemma4 and deepseekv4.1-flash-1017 — all GA, no "
+            "beta access needed — plus the beta models deepseekv4-pro, "
+            "kimi-k3, mimo-v2.6-flash and mimo-v2.6-pro); not implemented "
+            "here."
         ),
     },
     "/doc-ai/v1/job/parse": {
