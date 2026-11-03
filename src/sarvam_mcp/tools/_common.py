@@ -7,6 +7,7 @@ so tool modules can stay short and focused on their endpoint shape.
 from __future__ import annotations
 
 import base64
+import binascii
 import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -55,16 +56,23 @@ async def resolve_file_input(
     if filename:
         suffix = Path(filename).suffix or ""
 
+    decoded_data: bytes | None = None
+    if file_base64 is not None:
+        try:
+            decoded_data = base64.b64decode(file_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("Invalid base64 file data.") from exc
+        if len(decoded_data) > max_bytes:
+            raise ValueError(
+                f"Decoded file is {len(decoded_data)} bytes, exceeds {max_bytes} byte limit."
+            )
+
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp_path = Path(tmp.name)
     try:
         if file_base64 is not None:
-            data = base64.b64decode(file_base64)
-            if len(data) > max_bytes:
-                raise ValueError(
-                    f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
-                )
-            tmp.write(data)
+            assert decoded_data is not None
+            tmp.write(decoded_data)
             tmp.close()
             yield tmp_path
         else:
