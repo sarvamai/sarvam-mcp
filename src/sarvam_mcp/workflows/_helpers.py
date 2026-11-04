@@ -143,3 +143,32 @@ async def llm_complete(
 def merge(metrics: ToolMetrics, call: CallMetrics) -> None:
     """Convenience re-export so workflow modules don't import observability directly."""
     metrics.merge(call)
+
+
+## helper function for subtitle tool 
+async def stt_transcribe_with_timestamps(
+    sc: ServerContext,
+    audio_path: Path,
+    *,
+    language_code: str = "unknown",
+    model: str = "saaras:v3",
+    mode: str = "transcribe",
+    metrics: ToolMetrics | None = None,
+) -> tuple[str, str | None, list[dict[str, Any]]]:
+    """Run STT `with_timestamps=true`, returning (transcript, detected_language, timestamps)."""
+    with audio_path.open("rb") as fh:
+        files = {"file": (audio_path.name, fh, _audio_mime(audio_path))}
+        data: dict[str, Any] = {
+            "model": model,
+            "language_code": language_code,
+            "with_timestamps": "true",
+        }
+        if model == "saaras:v3":
+            data["mode"] = mode
+        body, call = await sc.client.post_multipart("/speech-to-text", data=data, files=files)
+        if metrics is not None:
+            metrics.merge(call)
+
+        timestamps = body.get("timestamps") or []
+        return body.get("transcript", ""), body.get("language_code"), timestamps
+
