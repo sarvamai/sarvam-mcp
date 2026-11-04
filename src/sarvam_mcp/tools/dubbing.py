@@ -64,7 +64,16 @@ def register(mcp: FastMCP) -> None:
     async def sarvam_dubbing_submit(
         ctx: Context,
         media_path: str = Field(description="Absolute path to the source video or audio."),
-        src_lang: str = Field(description="Source BCP-47 code, e.g. en-IN."),
+        src_lang: str = Field(
+            description=(
+                "Source BCP-47 code, e.g. en-IN, or \"auto\" to detect the language "
+                "from the speech before transcription (the job fails with an "
+                "error_message if detection fails). The 12 source/target codes are "
+                "11 Indian languages + en-IN; 11 more Indian languages and 15 "
+                "international languages (e.g. ja-JP, fr-FR) are accepted as source "
+                "only. Targets stay the 12. Odia is or-IN here, not od-IN."
+            )
+        ),
         target_langs: list[str] = Field(description="One or more target BCP-47 codes."),
         export_options: list[ExportOption] | None = Field(
             default=None,
