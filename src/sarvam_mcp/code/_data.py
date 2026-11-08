@@ -410,7 +410,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "frequency_penalty": "float (optional), -2.0 to 2.0",
             "presence_penalty":  "float (optional), -2.0 to 2.0",
             "seed":              "int (optional) — beta, best-effort determinism",
-            "n":                 "int (optional) — number of completions",
+            "n":                 "int (optional) — must be 1; since 2026-11-07 the API returns one completion per request and rejects n > 1 with 400 invalid_request_error",
             "tools":             "list[object] (optional) — OpenAI-style function-calling defs",
             "tool_choice":       "str | object (optional)",
             "response_format":   "object (optional) — {'type': 'json_object'} or json_schema",
@@ -428,8 +428,13 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "whole budget was consumed by hidden reasoning. Give it real "
             "headroom (300+) or omit max_tokens; reasoning_effort='low' "
             "reduces but does not eliminate this. "
-            "There is also a /v2/chat/completions endpoint (glm5.3, gemma4, "
-            "deepseekv4-flash open-weight models) — confirmed to require beta "
+            "There is also a /v2/chat/completions endpoint (glm5.3, glm5.3-flash, "
+            "gemma4, deepseekv4.1-flash, qwen38-27b open-weight models; plus "
+            "clef on /v2/systemone and embeddinggemma-2 on /v2/embeddings) — "
+            "the provisioned-throughput models (deepseekv4-pro, kimi-k3.1-pro, "
+            "qwen38-27b, clef, embeddinggemma-2) are enabled per organisation and "
+            "return 404 not_found_error without access; the v2 chat models were "
+            "confirmed to require beta "
             "whitelisting from Sarvam, so most subscription keys can't call it "
             "yet; not implemented here for that reason. Ask Sarvam for beta "
             "access before building against it."
@@ -606,7 +611,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 # Pricing — point estimate; PER-USER RATES MAY VARY based on plan/contract.
 # Always direct end users to https://dashboard.sarvam.ai → Billing for live.
-# Last reviewed: 2026-04-27.
+# Last reviewed: 2026-11-08.
 # ---------------------------------------------------------------------------
 
 PRICING: dict[str, dict[str, Any]] = {
@@ -620,6 +625,17 @@ PRICING: dict[str, dict[str, Any]] = {
     "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},
     "sarvam-105b-conversations": {"unit": "per 1M tokens",    "tier": "billed by tokens — same rate as sarvam-105b, per docs.sarvam.ai pricing page."},
     "sarvam-vision":        {"unit": "per page",              "tier": "billed by page"},
+    # Token Factory (/v2) open-weight models. Rs per 1M tokens.
+    "glm5.3":               {"unit": "per 1M tokens",         "tier": "Rs 126 in / Rs 20 cached / Rs 390 out (serverless)"},
+    "glm5.3-flash":         {"unit": "per 1M tokens",         "tier": "Rs 13.5 in / Rs 2.5 cached / Rs 45 out (serverless)"},
+    "gemma4":               {"unit": "per 1M tokens",         "tier": "Rs 35 in / Rs 10 cached / Rs 90 out (serverless)"},
+    "deepseekv4.1-flash-1017": {"unit": "per 1M tokens",      "tier": "Rs 14 in / Rs 0.25 cached / Rs 55 out (serverless)"},
+    "deepseekv4.1-flash-1017-interactive": {"unit": "per 1M tokens", "tier": "Rs 25 in / Rs 0.5 cached / Rs 105 out; >200 tok/s (serverless)"},
+    "deepseekv4-pro":       {"unit": "per 1M tokens",         "tier": "Rs 115 in / Rs 4 cached / Rs 350 out (provisioned throughput)"},
+    "kimi-k3.1-pro":        {"unit": "per 1M tokens",         "tier": "Rs 200 in / Rs 20 cached / Rs 950 out (provisioned throughput)"},
+    "qwen38-27b":           {"unit": "per 1M tokens",         "tier": "Rs 18 in / Rs 5 cached / Rs 230 out (provisioned throughput)"},
+    "clef":                 {"unit": "per 1M input tokens",   "tier": "Rs 20 in, no output tokens billed (provisioned throughput; /v2/systemone)"},
+    "embeddinggemma-2":     {"unit": "per 1M input tokens",   "tier": "Rs 2 in, no output tokens billed (provisioned throughput; /v2/embeddings)"},
 }
 
 PRICING_DISCLAIMER = (

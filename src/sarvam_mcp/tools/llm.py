@@ -78,7 +78,13 @@ def register(mcp: FastMCP) -> None:
             default=None, description="Beta: best-effort deterministic sampling.",
         ),
         n: int | None = Field(
-            default=None, ge=1, description="Number of completions to generate.",
+            default=None,
+            ge=1,
+            le=1,
+            description=(
+                "Must be 1. Since 2026-11-07 the API returns one completion per "
+                "request and rejects n > 1 with 400 invalid_request_error."
+            ),
         ),
         tools: list[dict[str, Any]] = Field(
             default_factory=list,
