@@ -158,3 +158,30 @@ async def test_binary_response_returned_as_bytes(client, httpx_mock):
     payload, _ = await client.post_json("/text-to-speech", json_body={"text": "hi"})
     assert isinstance(payload, bytes)
     assert payload.startswith(b"RIFF")
+
+
+@pytest.mark.parametrize("header", ["NaN", "inf", "-inf", "-1", "not-a-delay"])
+async def test_invalid_retry_after_is_not_exposed_as_delay(client, httpx_mock, header):
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.sarvam.ai/translate",
+        status_code=429,
+        headers={"retry-after": header},
+        json={"error": "slow down"},
+    )
+    with pytest.raises(SarvamRateLimitError) as exc_info:
+        await client.post_json("/translate", json_body={"input": "x"})
+    assert exc_info.value.retry_after is None
+
+
+async def test_zero_retry_after_is_preserved(client, httpx_mock):
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.sarvam.ai/translate",
+        status_code=429,
+        headers={"retry-after": "0"},
+        json={"error": "slow down"},
+    )
+    with pytest.raises(SarvamRateLimitError) as exc_info:
+        await client.post_json("/translate", json_body={"input": "x"})
+    assert exc_info.value.retry_after == 0.0

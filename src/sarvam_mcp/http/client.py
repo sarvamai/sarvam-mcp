@@ -8,6 +8,7 @@ Tools call ``client.post_json(...)``, ``client.post_multipart(...)``, or
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from typing import Any
@@ -58,9 +59,7 @@ class SarvamClient:
         json_body: Mapping[str, Any],
         scope: str | None = None,
     ) -> tuple[Any, CallMetrics]:
-        return await self._do_request(
-            "POST", path, json=dict(json_body), scope=scope
-        )
+        return await self._do_request("POST", path, json=dict(json_body), scope=scope)
 
     async def post_multipart(
         self,
@@ -85,9 +84,7 @@ class SarvamClient:
         params: Mapping[str, Any] | None = None,
         scope: str | None = None,
     ) -> tuple[Any, CallMetrics]:
-        return await self._do_request(
-            "GET", path, params=dict(params) if params else None, scope=scope
-        )
+        return await self._do_request("GET", path, params=dict(params) if params else None, scope=scope)
 
     async def delete_json(
         self,
@@ -96,9 +93,7 @@ class SarvamClient:
         params: Mapping[str, Any] | None = None,
         scope: str | None = None,
     ) -> tuple[Any, CallMetrics]:
-        return await self._do_request(
-            "DELETE", path, params=dict(params) if params else None, scope=scope
-        )
+        return await self._do_request("DELETE", path, params=dict(params) if params else None, scope=scope)
 
     async def put_blob(
         self,
@@ -120,17 +115,14 @@ class SarvamClient:
         if extra_headers:
             headers.update(extra_headers)
 
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout)
-        ) as blob_client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as blob_client:
             response = await blob_client.put(url, content=content, headers=headers)
 
         metrics = CallMetrics()
         metrics.status_code = response.status_code
         if not response.is_success:
             raise SarvamAPIError(
-                f"Blob upload failed ({response.status_code}): "
-                f"{response.text[:500]}",
+                f"Blob upload failed ({response.status_code}): {response.text[:500]}",
                 status_code=response.status_code,
                 request_id=None,
                 body=response.text,
@@ -242,9 +234,7 @@ class SarvamClient:
         # Unreachable
         raise AssertionError("unreachable")
 
-    async def _raise_for_error(
-        self, response: httpx.Response, metrics: CallMetrics
-    ) -> None:
+    async def _raise_for_error(self, response: httpx.Response, metrics: CallMetrics) -> None:
         body_text = response.text
         message = _extract_error_message(body_text) or response.reason_phrase
         kwargs = dict(
@@ -285,6 +275,7 @@ def _maybe_float(raw: str | None) -> float | None:
     if raw is None:
         return None
     try:
-        return float(raw)
+        value = float(raw)
+        return value if math.isfinite(value) and value >= 0 else None
     except (TypeError, ValueError):
         return None
