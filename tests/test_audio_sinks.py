@@ -51,6 +51,27 @@ async def test_both_sink_writes_and_returns_resource(tmp_base_path):
     assert (tmp_base_path / "x.wav").read_bytes() == SAMPLE
 
 
+async def test_file_sink_rejects_traversal_filename(tmp_base_path):
+    sink = FileSink(tmp_base_path)
+    with pytest.raises(ValueError, match="escapes base path"):
+        await sink.store(SAMPLE, filename="../escape.wav", mime_type="audio/wav")
+    assert not (tmp_base_path.parent / "escape.wav").exists()
+
+
+async def test_file_sink_rejects_absolute_filename(tmp_base_path, tmp_path):
+    sink = FileSink(tmp_base_path)
+    outside = tmp_path / "outside.wav"
+    with pytest.raises(ValueError, match="escapes base path"):
+        await sink.store(SAMPLE, filename=str(outside), mime_type="audio/wav")
+    assert not outside.exists()
+
+
+async def test_file_sink_allows_plain_filename_after_guard(tmp_base_path):
+    sink = FileSink(tmp_base_path)
+    result = await sink.store(SAMPLE, filename="ok.wav", mime_type="audio/wav")
+    assert result.file_path == str((tmp_base_path / "ok.wav").resolve())
+
+
 def test_build_sink_dispatch(tmp_base_path):
     assert isinstance(build_sink("files", tmp_base_path), FileSink)
     assert isinstance(build_sink("resources", tmp_base_path), ResourceSink)
