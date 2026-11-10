@@ -435,6 +435,43 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "access before building against it."
         ),
     },
+    "/v2/systemone": {
+        "method": "POST",
+        "model": "sarvam-prism",
+        "content_type": "application/json",
+        "request_body": {
+            "model":     "str, required — must be 'sarvam-prism' (case-sensitive)",
+            "state":     "str | object | array, required — the input; objects/arrays are sent as compact JSON. Never truncated",
+            "questions": "object, required (>=1) — your question id -> {type, instructions, criteria}. No other keys",
+            "questions.*.type":         "str — noul (yes/no) | choice (pick one) | score (ordered scale), lowercase",
+            "questions.*.instructions": "str | object | array — the question text",
+            "questions.*.criteria":     "noul: optional {true, false}; choice: required {option_id: description}, 2-255 options; score: required list of 2-10 level descriptions, lowest first",
+        },
+        "response": {
+            "model": "str — sarvam-prism",
+            "answers": "object — one entry per question id, each with its `type`",
+            "answers.noul": "noul: float 0-1, probability of yes",
+            "answers.choice": "choice: top option id, plus confidence and probabilities keyed by your option ids",
+            "answers.score": "score: expected level (0-based float), plus confidence, legend and probabilities keyed '0', '1', ...",
+            "usage": "{input_tokens, output_tokens} — output_tokens is always 0",
+        },
+        "notes": (
+            "Decision model (System-1) built on Sarvam 105B: scores options, generates no text. "
+            "Synchronous, no streaming; 60 s timeout (503 model_overloaded beyond that — split big batches). "
+            "Auth: api-subscription-key or Authorization: Bearer. "
+            "Not accepted (422): temperature, max_tokens, stream, images; an image URL is a 400. "
+            "Limit: 32,768 tokens per question (state + question + options), checked per question — "
+            "one oversized question fails the whole request. No cap on the number of questions. "
+            "For score questions option order defines the scale; for choice it does not. "
+            "Ask every question about one state in a single call: the state is billed once. "
+            "Probabilities can vary slightly between identical requests; the top answer is stable, "
+            "so leave a margin around thresholds. Calibration refers to the top probability "
+            "(noul, or probabilities[choice]), not the rescaled `confidence`. Indian-language "
+            "answers clear a 0.9 threshold far less often than English (~38% vs ~69%). "
+            "Languages: English, 10 Indian languages, Hinglish. SDKs: Python sarvamai>=0.1.43, "
+            "JavaScript sarvamai>=1.1.15. Retry 429/502/503 with backoff; other 4xx are not retryable."
+        ),
+    },
     "/doc-ai/v1/job/parse": {
         "method": "POST",
         "model": "sarvam-vision",
@@ -620,6 +657,7 @@ PRICING: dict[str, dict[str, Any]] = {
     "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},
     "sarvam-105b-conversations": {"unit": "per 1M tokens",    "tier": "billed by tokens — same rate as sarvam-105b, per docs.sarvam.ai pricing page."},
     "sarvam-vision":        {"unit": "per page",              "tier": "billed by page"},
+    "sarvam-prism":         {"unit": "per 1M input tokens",   "tier": "billed by input tokens only (output tokens are always 0). Listed at Rs. 4 per 1M input on docs.sarvam.ai; the state is counted once per request however many questions you ask."},
 }
 
 PRICING_DISCLAIMER = (

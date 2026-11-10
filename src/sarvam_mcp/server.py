@@ -109,6 +109,7 @@ def build_server() -> FastMCP:
         dubbing,
         language,
         llm,
+        prism,
         pronunciation,
         stt,
         translate,
@@ -127,6 +128,7 @@ def build_server() -> FastMCP:
     language.register(mcp)
     llm.register(mcp)
     vision.register(mcp)
+    prism.register(mcp)
     pronunciation.register(mcp)
     document_translate.register(mcp)
     dubbing.register(mcp)

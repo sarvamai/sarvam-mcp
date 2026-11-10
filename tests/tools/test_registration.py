@@ -26,6 +26,7 @@ EXPECTED_TOOLS = {
     "sarvam_tools_vision_classify",
     "sarvam_tools_vision_split",
     "sarvam_tools_vision_job_status",
+    "sarvam_tools_prism_decide",
     "sarvam_tools_document_translate",
     "sarvam_tools_document_translate_status",
     "sarvam_tools_dubbing_submit",
