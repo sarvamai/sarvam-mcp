@@ -34,6 +34,7 @@ EndpointPath = Literal[
     "/text-lid",
     "/text-analytics",
     "/v1/chat/completions",
+    "/v2/systemone",
     "/doc-ai/v1/job/parse",
     "/doc-ai/v1/job/extract",
     "/doc-ai/v1/job/classify",

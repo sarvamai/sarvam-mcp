@@ -1,6 +1,6 @@
 # sarvam-mcp
 
-Official Sarvam MCP server. Exposes every public Sarvam API — STT, TTS, Translate, Transliterate, Language ID, Text Analytics, LLM (30B / 105B), Vision Document Intelligence, Pronunciation Dictionaries — as first-class MCP tools so any MCP-aware client (Claude Desktop, Claude Code, Cursor, Windsurf, Zed) can call Sarvam with zero boilerplate.
+Official Sarvam MCP server. Exposes every public Sarvam API — STT, TTS, Translate, Transliterate, Language ID, Text Analytics, LLM (30B / 105B), Vision Document Intelligence, Prism Decisions, Pronunciation Dictionaries — as first-class MCP tools so any MCP-aware client (Claude Desktop, Claude Code, Cursor, Windsurf, Zed) can call Sarvam with zero boilerplate.
 
 Cross-platform Python package: **macOS, Windows, and Linux** (Python 3.11+).
 
@@ -96,6 +96,7 @@ All defaults below reflect the latest non-deprecated models.
 | `sarvam_vision_classify` | Label a document, or each page, against your categories | Sarvam Vision |
 | `sarvam_vision_split` | Split a bundle of pages into separate documents | Sarvam Vision |
 | `sarvam_vision_job_status` | Poll a Document AI job | — |
+| `sarvam_prism_decide` | Calibrated yes/no, pick-one and ordered-scale decisions | `sarvam-prism` |
 | `sarvam_dubbing_submit` | Official video/audio dubbing job | — |
 | `sarvam_pronunciation_list` | List pronunciation dictionaries | — |
 | `sarvam_pronunciation_get` | Get a pronunciation dictionary | — |

@@ -244,6 +244,23 @@ def _recommend(task: str) -> dict[str, Any]:
             snippet_key=("llm", "python"),
         )
 
+    # ---- calibrated decisions
+    if re.search(
+        r"\b(prism|decision model|calibrated|yes[/ ]or[ /]no|yes/no|probabilit(y|ies)|triage|route (tickets?|requests?|messages?))\b",
+        t,
+    ):
+        return _result(
+            model="sarvam-prism",
+            endpoint="/v2/systemone",
+            why=(
+                "Sarvam Prism — scores yes/no, pick-one and ordered-scale questions and returns a "
+                "calibrated probability per option. No text generation, so no output to parse."
+            ),
+            language_code=detected_lang,
+            snippet_key=None,
+            extras={"note": "Batch every question about one input into one call (state is billed once). Question types: noul, choice, score."},
+        )
+
     # ---- document classify / split
     if re.search(r"\b(classify|classification|categorize|categorise|document type)\b", t) and re.search(
         r"\b(document|pdf|page|pages|invoice|receipt|scan)\b", t
