@@ -11,6 +11,8 @@ import json
 import math
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -247,7 +249,7 @@ class SarvamClient:
         if response.status_code == 400:
             raise SarvamBadRequestError(message, **kwargs)
         if response.status_code == 429:
-            retry_after = _maybe_float(response.headers.get("retry-after"))
+            retry_after = _parse_retry_after(response.headers.get("retry-after"))
             raise SarvamRateLimitError(message, retry_after=retry_after, **kwargs)
         raise SarvamAPIError(message, **kwargs)
 
@@ -271,11 +273,19 @@ def _extract_error_message(body_text: str) -> str | None:
     return body_text[:500]
 
 
-def _maybe_float(raw: str | None) -> float | None:
+def _parse_retry_after(raw: str | None) -> float | None:
+    """Parse a delay or HTTP-date, ignoring invalid Retry-After values."""
     if raw is None:
         return None
     try:
         value = float(raw)
         return value if math.isfinite(value) and value >= 0 else None
     except (TypeError, ValueError):
-        return None
+        try:
+            retry_at = parsedate_to_datetime(raw)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        # The obsolete asctime HTTP-date form has no timezone; HTTP uses UTC.
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=UTC)
+        return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())

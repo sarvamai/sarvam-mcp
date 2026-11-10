@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from unittest.mock import patch
+
 import httpx
 import pytest
 
@@ -160,7 +163,20 @@ async def test_binary_response_returned_as_bytes(client, httpx_mock):
     assert payload.startswith(b"RIFF")
 
 
-@pytest.mark.parametrize("header", ["NaN", "inf", "-inf", "-1", "not-a-delay"])
+@pytest.mark.parametrize(
+    "header",
+    [
+        "NaN",
+        "inf",
+        "-inf",
+        "-1",
+        "not-a-delay",
+        "",
+        "1e999",
+        "Wed, 32 Oct 2026 07:28:00 GMT",
+        "Wed, 21 Oct 2026 25:28:00 GMT",
+    ],
+)
 async def test_invalid_retry_after_is_not_exposed_as_delay(client, httpx_mock, header):
     httpx_mock.add_response(
         method="POST",
@@ -185,3 +201,40 @@ async def test_zero_retry_after_is_preserved(client, httpx_mock):
     with pytest.raises(SarvamRateLimitError) as exc_info:
         await client.post_json("/translate", json_body={"input": "x"})
     assert exc_info.value.retry_after == 0.0
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [
+        ("Wed, 21 Oct 2026 07:28:00 GMT", 60.0),
+        ("Wednesday, 21-Oct-26 07:28:00 GMT", 60.0),
+        ("Wed Oct 21 07:28:00 2026", 60.0),
+        ("Wed, 21 Oct 2026 07:27:00 GMT", 0.0),
+        ("Wed, 21 Oct 2026 07:26:00 GMT", 0.0),
+    ],
+)
+async def test_http_date_retry_after(client, httpx_mock, header, expected):
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.sarvam.ai/translate",
+        status_code=429,
+        headers={"retry-after": header},
+        json={"error": "slow down"},
+    )
+    with patch("sarvam_mcp.http.client.datetime", create=True) as clock:
+        clock.now.return_value = datetime(2026, 10, 21, 7, 27, tzinfo=UTC)
+        with pytest.raises(SarvamRateLimitError) as exc_info:
+            await client.post_json("/translate", json_body={"input": "x"})
+    assert exc_info.value.retry_after == expected
+
+
+async def test_missing_retry_after(client, httpx_mock):
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.sarvam.ai/translate",
+        status_code=429,
+        json={"error": "slow down"},
+    )
+    with pytest.raises(SarvamRateLimitError) as exc_info:
+        await client.post_json("/translate", json_body={"input": "x"})
+    assert exc_info.value.retry_after is None
