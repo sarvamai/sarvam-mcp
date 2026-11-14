@@ -155,7 +155,7 @@ def _gather_files(paths: list[str], max_files: int) -> list[Path]:
             if _supported(p):
                 out.append(p)
         elif p.is_dir():
-            for sub in sorted(p.rglob("*")):
+            for sub in p.rglob("*"):
                 if sub.is_file() and _supported(sub):
                     out.append(sub)
                 if len(out) >= max_files:
