@@ -643,7 +643,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 # Pricing — point estimate; PER-USER RATES MAY VARY based on plan/contract.
 # Always direct end users to https://dashboard.sarvam.ai → Billing for live.
-# Last reviewed: 2026-04-27.
+# Last reviewed: 2026-11-17.
 # ---------------------------------------------------------------------------
 
 PRICING: dict[str, dict[str, Any]] = {
@@ -654,10 +654,11 @@ PRICING: dict[str, dict[str, Any]] = {
     "bulbul:v4-flash":      {"unit": "per character",         "tier": "billed by character (assumed same unit as bulbul:v3 — docs.sarvam.ai doesn't publish a v4-flash rate yet; confirm on dashboard.sarvam.ai)"},
     "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
     "sarvam-translate:v1":  {"unit": "per character",         "tier": "billed by character"},
-    "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},
-    "sarvam-105b-conversations": {"unit": "per 1M tokens",    "tier": "billed by tokens — same rate as sarvam-105b, per docs.sarvam.ai pricing page."},
+    "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Introductory pricing through end of 2026: Rs 10 input / Rs 0.25 cached input / Rs 25 output per 1M tokens (docs.sarvam.ai/pricing). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},
+    "sarvam-105b-conversations": {"unit": "per 1M tokens",    "tier": "billed by tokens — same rate as sarvam-105b (introductory pricing through end of 2026), per docs.sarvam.ai pricing page."},
     "sarvam-vision":        {"unit": "per page",              "tier": "billed by page"},
     "sarvam-prism":         {"unit": "per 1M input tokens",   "tier": "billed by input tokens only (output tokens are always 0). Listed at Rs. 4 per 1M input on docs.sarvam.ai; the state is counted once per request however many questions you ask."},
+    "deepseekv4.1-flash-1017": {"unit": "per 1M tokens",      "tier": "billed by tokens (open-weight model on /v2/chat/completions, beta access required). Introductory pricing through end of 2026: Rs 14 input / Rs 0.25 cached input / Rs 55 output per 1M tokens; reasoning is billed as output."},
 }
 
 PRICING_DISCLAIMER = (
