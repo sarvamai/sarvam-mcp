@@ -65,8 +65,6 @@ async def resolve_file_input(
                     f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
                 )
             tmp.write(data)
-            tmp.close()
-            yield tmp_path
         else:
             assert file_url is not None
             async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
@@ -80,9 +78,15 @@ async def resolve_file_input(
                                 f"Downloaded file exceeds {max_bytes} byte limit."
                             )
                         tmp.write(chunk)
-            tmp.close()
-            yield tmp_path
+        tmp.close()
+        yield tmp_path
     finally:
+        # The branch above only closes the handle on success; when it raised,
+        # ``close()`` was never reached and the unlink below ran with the file
+        # handle still open — a PermissionError on Windows that masked the
+        # real error, and an unlinked-but-open fd until GC on POSIX (#59).
+        # Closing here is idempotent, so it is safe on every path.
+        tmp.close()
         tmp_path.unlink(missing_ok=True)
 
 # ---- Language codes -------------------------------------------------------
