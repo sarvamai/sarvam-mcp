@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 from fastmcp import Context, FastMCP
 from pydantic import Field
@@ -21,6 +21,9 @@ from sarvam_mcp.workflows._helpers import translate_text
 
 # Cap protects against runaway translation cost on a misuse.
 MAX_STRINGS = 500
+_LOCALE_SUFFIXES = {
+    suffix for code in get_args(LanguageCode) if code.endswith("-IN") for suffix in (code.lower(), code[:-3])
+}
 
 
 def register(mcp: FastMCP) -> None:
@@ -32,7 +35,7 @@ def register(mcp: FastMCP) -> None:
             "language. Walks all string values (nested JSON supported), runs "
             "each through Sarvam-Translate, and writes a sibling file with "
             "the language code as suffix (e.g. `messages.en.json` → "
-            "`messages.hi.json`).\n\n"
+            "`messages.hi-IN.json`).\n\n"
             "For repos with many files, call this tool once per locale file. "
             "Skips non-string leaves (numbers, booleans, etc.) untouched."
         ),
@@ -52,8 +55,9 @@ def register(mcp: FastMCP) -> None:
         output_path: str | None = Field(
             default=None,
             description=(
-                "Where to write the localized file. Defaults to the source path "
-                "with the target language code injected before the extension."
+                "Explicit destination, which may replace an existing file. "
+                "By default, writes a new sibling file with the target language suffix "
+                "and fails if that destination already exists."
             ),
         ),
         model: str = Field(
@@ -73,10 +77,10 @@ def register(mcp: FastMCP) -> None:
             raise FileNotFoundError(f"Source file not found: {src}")
 
         out_path = (
-            Path(output_path).expanduser()
-            if output_path
-            else _default_output_path(src, target_language_code)
+            Path(output_path).expanduser() if output_path else _default_output_path(src, target_language_code)
         )
+        if not output_path and (out_path.exists() or out_path.is_symlink()):
+            raise FileExistsError(f"Default output already exists: {out_path}. Specify output_path.")
 
         with measure_tool() as metrics:
             if src.suffix.lower() == ".json":
@@ -103,7 +107,7 @@ def register(mcp: FastMCP) -> None:
                     if (i + 1) % 25 == 0:
                         await ctx.report_progress(i + 1, len(strings))
 
-                out_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+                output = json.dumps(data, indent=2, ensure_ascii=False)
                 count = len(strings)
             else:
                 # Treat as `key=value` lines, preserving comments + blank lines.
@@ -132,7 +136,11 @@ def register(mcp: FastMCP) -> None:
                     )
                     out_lines.append(f"{key}= {translated}")
                     count += 1
-                out_path.write_text("\n".join(out_lines) + "\n")
+                output = "\n".join(out_lines) + "\n"
+
+            # A destination may appear while the translation calls are running.
+            with out_path.open("w" if output_path else "x") as output_file:
+                output_file.write(output)
 
         return {
             "source_path": str(src),
@@ -149,20 +157,13 @@ def register(mcp: FastMCP) -> None:
 
 
 def _default_output_path(src: Path, target: str) -> Path:
-    """`messages.en.json` + 'hi-IN' → `messages.hi-IN.json`. Fall back to .out."""
-    stem = src.stem
-    parts = stem.split(".")
-    if len(parts) >= 2:
-        parts[-1] = target
-        new_stem = ".".join(parts)
-    else:
-        new_stem = f"{stem}.{target}"
-    return src.with_name(f"{new_stem}{src.suffix}")
+    """Replace a known locale suffix, or append the target to the full stem."""
+    prefix, _, last = src.stem.rpartition(".")
+    stem = prefix if prefix and last.lower() in _LOCALE_SUFFIXES else src.stem
+    return src.with_name(f"{stem}.{target}{src.suffix}")
 
 
-def _collect_strings(
-    node: Any, path: list[str | int], out: list[tuple[list[str | int], str]]
-) -> None:
+def _collect_strings(node: Any, path: list[str | int], out: list[tuple[list[str | int], str]]) -> None:
     """Walk a JSON tree and gather (path, string-value) pairs."""
     if isinstance(node, dict):
         for k, v in node.items():
