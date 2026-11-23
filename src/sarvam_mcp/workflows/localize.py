@@ -73,9 +73,7 @@ def register(mcp: FastMCP) -> None:
             raise FileNotFoundError(f"Source file not found: {src}")
 
         out_path = (
-            Path(output_path).expanduser()
-            if output_path
-            else _default_output_path(src, target_language_code)
+            Path(output_path).expanduser() if output_path else _default_output_path(src, target_language_code)
         )
 
         with measure_tool() as metrics:
@@ -99,7 +97,10 @@ def register(mcp: FastMCP) -> None:
                         model=model,
                         metrics=metrics,
                     )
-                    _set_path(data, path_parts, translated)
+                    if path_parts:
+                        _set_path(data, path_parts, translated)
+                    else:
+                        data = translated
                     if (i + 1) % 25 == 0:
                         await ctx.report_progress(i + 1, len(strings))
 
@@ -160,9 +161,7 @@ def _default_output_path(src: Path, target: str) -> Path:
     return src.with_name(f"{new_stem}{src.suffix}")
 
 
-def _collect_strings(
-    node: Any, path: list[str | int], out: list[tuple[list[str | int], str]]
-) -> None:
+def _collect_strings(node: Any, path: list[str | int], out: list[tuple[list[str | int], str]]) -> None:
     """Walk a JSON tree and gather (path, string-value) pairs."""
     if isinstance(node, dict):
         for k, v in node.items():
