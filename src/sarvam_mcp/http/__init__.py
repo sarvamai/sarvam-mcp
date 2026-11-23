@@ -5,6 +5,7 @@ from sarvam_mcp.http.errors import (
     SarvamAPIError,
     SarvamAuthError,
     SarvamConnectionError,
+    SarvamQuotaError,
     SarvamRateLimitError,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "SarvamAPIError",
     "SarvamAuthError",
     "SarvamConnectionError",
+    "SarvamQuotaError",
     "SarvamRateLimitError",
 ]

@@ -103,6 +103,44 @@ def register(mcp: FastMCP) -> None:
         }
 
     @mcp.tool(
+        name="sarvam_tools_pronunciation_update",
+        description=(
+            "Runtime tool — calls Sarvam API now.\n\n"
+            "Update a pronunciation dictionary (PUT /text-to-speech/pronunciation-dictionary). "
+            "Entries not included here stay unchanged; entries you send are added or overwritten. "
+            "Max 100 words per dictionary (422 above), 1 MB file."
+        ),
+    )
+    async def sarvam_pronunciation_update(
+        ctx: Context,
+        dictionary_id: str = Field(description="The pronunciation dictionary ID (p_xxxxxxxx)."),
+        entries: dict[str, str] = Field(
+            description="Word-to-pronunciation mappings to add/overwrite: {'CEO': 'see ee oh'}.",
+        ),
+        language_code: str = Field(
+            default="hi-IN",
+            description="BCP-47 language code for these entries, e.g. 'hi-IN', 'en-IN'.",
+        ),
+    ) -> dict[str, Any]:
+        sc = await ready_ctx(ctx)
+        dictionary = {"pronunciations": {language_code: entries}}
+        dict_bytes = json.dumps(dictionary, ensure_ascii=False).encode("utf-8")
+        with measure_tool() as metrics:
+            payload, call = await sc.client.put_multipart(
+                PRONDICT_BASE,
+                params={"dict_id": dictionary_id},
+                files={"file": ("dictionary.json", dict_bytes, "application/json")},
+            )
+            metrics.merge(call)
+        body = payload if isinstance(payload, dict) else {}
+        return {
+            "dictionary_id": body.get("dictionary_id", dictionary_id),
+            "updated_pronunciations": body.get("updated_pronunciations"),
+            "raw": payload,
+            "observability": metrics.to_response_block(),
+        }
+
+    @mcp.tool(
         name="sarvam_tools_pronunciation_delete",
         description=(
             "Runtime tool — calls Sarvam API now.\n\n"

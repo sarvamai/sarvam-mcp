@@ -9,6 +9,7 @@ Update cadence: bump these any time Sarvam adds a model/speaker/language
 or changes pricing. CI will surface a diff in PR review.
 
 Last verified live against api.sarvam.ai: 2026-10-06.
+Docs-synced (not live-tested): 2026-11-23 — pricing, rate limits, Chat V2, Responses, Dictate, voice cloning.
 """
 
 from __future__ import annotations
@@ -214,15 +215,17 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "request_body": {
             "text":                 "str, required — text to synthesize, max 2500 characters",
             "inputs":               "list[str] (legacy alternative to `text`) — each item max 500 characters; prefer `text`",
-            "target_language_code": "str, required — one of TTS-supported codes",
+            "language_code":        "str, required — one of the 11 TTS codes (documented field name; the older `target_language_code` spelling appears in existing code)",
             "speaker":              "str, required — must be compatible with chosen model",
             "model":                "str — 'bulbul:v3' (default) | 'bulbul:v4-flash'",
-            "speech_sample_rate":   "int — 8000|16000|22050|24000|32000|44100|48000",
-            "output_audio_codec":   "str (optional) — wav (default) | mp3 | aac | flac | linear16 | mulaw | opus (opus needs 8000/12000/16000/24000/48000 Hz)",
+            "speech_sample_rate":   "int, default 22050 — REST: 8000|16000|22050|24000|32000|44100|48000; streaming: 8000|16000|22050|24000 only",
+            "output_audio_codec":   "str (optional) — wav (default) | mp3 | aac | flac | linear16 | mulaw | alaw | opus (opus needs 8000/16000/24000/48000 Hz; 22050 -> 400). HTTP stream default is mp3",
+            "temperature":          "float 0.01-1.0, default 0.6 — randomness/expressiveness",
+            "enable_cached_responses": "bool (beta, default false) — behaviour not guaranteed",
             "pace":                 "float, 0.5 to 2.0 (default 1)",
             "pitch":                "float (optional), -0.5 to 0.5",
             "loudness":             "float (optional), 0.1 to 2.5",
-            "enable_preprocessing": "bool — normalize numbers/dates/code-mix",
+            "enable_preprocessing": "bool, default false — normalize English words and numeric entities (accepted on both models)",
             "dict_id":              "str (optional) — pronunciation dictionary ID to apply",
         },
         "response": {
@@ -236,8 +239,10 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "rejects v3 names. Both models accept `pitch`, `loudness` and `pace` "
             "(live-confirmed 2026-10-06; the earlier 'v3 rejects pitch/loudness' "
             "behavior is gone) and out-of-range values return 400. "
-            "`temperature` is silently ignored on v4-flash. Max input length: "
-            "2500 characters via `text` (the legacy `inputs` array caps each item at "
+            "`temperature` (0.01-1.0, default 0.6) is documented for both models (an earlier live check "
+            "found it ignored on v4-flash — verify). Max input length: "
+            "2500 characters via `text` (REST), 3500 per HTTP-stream request, 2500 per WebSocket message "
+            "(the legacy `inputs` array caps each item at "
             "500 — live-confirmed 2026-10-06). v4-flash: no SSML, native-script text recommended "
             "(romanised Indic degrades quality); also served by HTTP streaming "
             "(POST /text-to-speech/stream) and the WebSocket below."
@@ -312,7 +317,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
     },
     "/speech-to-text-realtime/ws": {
         "method": "GET",
-        "model": "saaras:v3-realtime (default), saaras:v4",
+        "model": "saaras:v4 (default, recommended), saaras:v3-realtime (legacy)",
         "content_type": "websocket",
         "request_body": {
             "query":       "language_code (or auto), model, mode, encoding, sample_rate, stream_type",
@@ -401,10 +406,10 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "request_body": {
             "model":             "str — 'sarvam-105b' | 'sarvam-105b-conversations'",
             "messages":          "list[{role, content}]",
-            "temperature":       "float, 0.0 to 2.0",
-            "top_p":             "float, 0.0 to 1.0",
-            "max_tokens":        "int (optional)",
-            "reasoning_effort":  "str (optional) — 'low' | 'medium' (default) | 'high'",
+            "temperature":       "float, 0.0 to 2.0 — omit to use the model default: sarvam-105b 1.0 (reasoning on) / 0.6 (reasoning off); sarvam-105b-conversations 0.6",
+            "top_p":             "float >0 to 1.0, default 1.0",
+            "max_tokens":        "int (optional), API default 2048",
+            "reasoning_effort":  "str (optional) — 'low' | 'medium' (default) | 'high'; explicit null turns reasoning OFF. sarvam-105b-conversations runs with reasoning off only — do not set a level",
             "stream":            "bool",
             "stop":              "list[str] (optional) — up to 4 sequences",
             "frequency_penalty": "float (optional), -2.0 to 2.0",
@@ -428,19 +433,18 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "whole budget was consumed by hidden reasoning. Give it real "
             "headroom (300+) or omit max_tokens; reasoning_effort='low' "
             "reduces but does not eliminate this. "
-            "There is also a /v2/chat/completions endpoint (glm5.3, gemma4, "
-            "deepseekv4-flash open-weight models) — confirmed to require beta "
-            "whitelisting from Sarvam, so most subscription keys can't call it "
-            "yet; not implemented here for that reason. Ask Sarvam for beta "
-            "access before building against it."
+            "For the open-weight models (glm5.3, glm5.3-flash, gemma4, deepseekv4.1-flash-1017[-interactive], "
+            "deepseekv4-pro, kimi-k3.1-pro, qwen38-27b) use /v2/chat/completions, which is GA since "
+            "2026-10-20 — sarvam_tools_llm_complete routes to it automatically. n>1 returns 400 on both "
+            "endpoints since 2026-11-07. Sarvam-M and Sarvam-30B are deprecated; use sarvam-105b."
         ),
     },
     "/v2/systemone": {
         "method": "POST",
-        "model": "sarvam-prism",
+        "model": "sarvam-prism | clef",
         "content_type": "application/json",
         "request_body": {
-            "model":     "str, required — must be 'sarvam-prism' (case-sensitive)",
+            "model":     "str, required — 'sarvam-prism' (serverless) or 'clef' (Provisioned Throughput; also reads base64 images, up to 65,536 tokens/request, 1-255 options, 1-10 levels). Case-sensitive",
             "state":     "str | object | array, required — the input; objects/arrays are sent as compact JSON. Never truncated",
             "questions": "object, required (>=1) — your question id -> {type, instructions, criteria}. No other keys",
             "questions.*.type":         "str — noul (yes/no) | choice (pick one) | score (ordered scale), lowercase",
@@ -490,7 +494,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "notes": (
             "Full-document parse (OCR). Poll GET /doc-ai/v1/job/{job_id}/status, then "
             "GET /doc-ai/v1/job/{job_id}/download-url. "
-            "Limits: 30 pages per PDF, 30 images per ZIP, 200 MB."
+            "Limit: 20 pages per request (PDF, or ZIP of JPG/PNG pages). GET /doc-ai/v1/capabilities returns the live limits."
         ),
     },
     "/doc-ai/v1/job/extract": {
@@ -503,11 +507,14 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "config_id":     "str — alternative to schema",
             "language":      "str — BCP-47",
             "output_format": "str — json | csv | xlsx",
+            "mode":          "str — basic (default) | advanced (second whole-document pass; slower, ₹2.50 vs ₹1.00 per page)",
+            "classification": "'true' | 'false' (text) — also classify the document",
+            "model":         "str — sarvam-vision-v1",
         },
         "response": {"job_id": "str", "status": "str"},
         "notes": (
-            "Schema extraction. Poll status, then GET /doc-ai/v1/job/{job_id}/results. "
-            "Limits: 20 pages per PDF, 20 images per ZIP, 200 MB."
+            "Schema extraction. Exactly one of schema / config_id. Poll status, then "
+            "GET /doc-ai/v1/job/{job_id}/results. Limit: 500 pages per request (PDF, or ZIP of JPG/PNG pages)."
         ),
     },
     "/doc-ai/v1/job/classify": {
@@ -517,21 +524,30 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "request_body": {
             "file":        "binary, required (or upload_ids). PDF, PNG, JPEG or TIFF; repeat for up to 10 documents",
             "request":     "JSON part (application/json) — see below",
-            "request.config.scope":      "str — document (default) | page",
-            "request.config.categories": "list of {type, description}, max 20. Omit to get a suggested type",
+            "request.config.categories": "list of {type (required), description, identifier_key, positive_examples[<=8], negative_examples[<=8]}, up to 200. Omit to let the API read types from instructions or suggest one",
+            "request.config.instructions": "str, up to 8,000 chars",
+            "request.config.page_ranges": "str '1-3,5' or list of {start,end}. Mutually exclusive with request.max_pages (422 PAGE_SELECTION_CONFLICT)",
             "request.config.unmatched_behavior": "str — suggest_type (default) | other",
-            "request.language":          "str — BCP-47, e.g. en-IN",
-            "request.execution":         "'auto' — wait briefly and return results with HTTP 200 for a single document",
+            "request.config.label_mode":  "'single' (the only value)",
+            "request.config.review_policy.min_class_confidence": "0-1, default 0.9",
+            "request.max_pages":          "int 1-1000 — read the first N pages",
+            "request.language":           "str — BCP-47, e.g. en-IN",
+            "request.context":            "str, up to 4,000 chars",
+            "request.reasoning_input":    "auto (default) | text_only | images_for_scans | vision (image modes only where /doc-ai/v1/capabilities lists them)",
+            "request.config_id | request.processor": "saved config / published processor instead of an inline config (exactly one of config, config_id, processor)",
+            "request.output.include_evidence": "bool, default false",
+            "request.metadata / webhook_url / webhook_secret / webhook_id": "echoed back with the result / webhook delivery",
         },
         "response": {"job_id": "str", "status": "str — accepted", "status_url": "str", "results_url": "str"},
         "notes": (
-            "Labels a document, or each page, against your categories. Poll "
+            "ONE decision per document — there is no `scope` (removed 2026-11; use Split with categories "
+            "for a result per document). Poll "
             "GET /doc-ai/v1/job/{job_id}/status until completed, then GET "
             "/doc-ai/v1/job/{job_id}/results (add ?include=details for evidence). "
             "Check review_required; confidence can be null. A bundle of several "
             "documents returns classification_status 'mixed' — split it first. "
-            "Limits: 500 pages, 10 documents per request, 20 categories, "
-            "1,000 segments, 512 MB per document."
+            "Limits: 20 pages per request, 10 documents per request, up to 200 categories, "
+            "512 MB per document."
         ),
     },
     "/doc-ai/v1/job/split": {
@@ -541,21 +557,25 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "request_body": {
             "file":    "binary, required (or upload_ids). PDF, PNG, JPEG or TIFF",
             "request": "JSON part (application/json) — see below",
-            "request.config.method": "str — semantic (default) | fixed_pages | page_ranges | triggers",
-            "request.config.pages_per_segment": "int — fixed_pages",
-            "request.config.segment_ranges":    "list of {start, end}, 1-based inclusive — page_ranges",
-            "request.config.split_on":          "list of markers {type: qr_code|barcode|blank_page|text|photo, match, ...} — triggers",
             "request.config.classify_segments": "bool, default true. Send categories when true, omit them when false",
-            "request.config.categories":        "list of {type, description}",
+            "request.config.categories":        "list of {type (required), description, identifier_key, positive_examples, negative_examples}, up to 200",
+            "request.config.instructions":      "str, up to 8,000 chars",
+            "request.config.page_ranges":       "str '1-3,5' or list of {start,end}. Default: every page",
+            "request.config.constraints.must_keep_together": "list of {start,end} page runs kept in one document",
+            "request.config.constraints.must_split_before":  "list of pages that always start a new document",
+            "request.config.review_policy.min_segment_confidence / min_class_confidence": "0-1, default 0.9",
+            "request.context / language / read_ref / config_id / processor / metadata / webhook_*": "as classify (reasoning_input: auto | text_only only)",
         },
         "response": {"job_id": "str", "status": "str — accepted", "status_url": "str", "results_url": "str"},
         "notes": (
-            "Splits a bundle into child documents, each with original page numbers and a "
+            "The model always finds the boundaries — there is NO `method`, `pages_per_segment`, "
+            "`segment_ranges`, `split_on`, `remainder`, `quality`, `output`, `budget` or `execution` "
+            "(removed 2026-11; sending them is rejected). Splits a bundle into child documents, each with original page numbers and a "
             "document_ref. Poll status, then GET /doc-ai/v1/job/{job_id}/results. "
             "'completed' does not mean every segment passed review — check each "
             "segment's review_required. "
-            "Limits: 500 pages, 10 documents per request, 20 categories, "
-            "1,000 segments, 512 MB per document."
+            "Limits: 500 pages, 10 documents per request, up to 200 categories, "
+            "512 MB per document."
         ),
     },
     "/translate/document/jobs": {
@@ -582,7 +602,7 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "request_body": {
             "src_lang":       "str, required — REST field name, not source_language_code",
             "target_langs":   "list[str], required",
-            "export_options": "list — video | audio | mp3 | srt",
+            "export_options": "list — video | audio | audio_vocals | srt | vtt (omit = dubbed MP4 only). editor_flow=true suppresses auto-export and bills 2x",
             "voice_cloning":  "bool, default true",
             "editor_flow":    "bool — keep false for API integrations",
         },
@@ -641,53 +661,341 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
 
 
 # ---------------------------------------------------------------------------
-# Pricing — point estimate; PER-USER RATES MAY VARY based on plan/contract.
-# Always direct end users to https://dashboard.sarvam.ai → Billing for live.
-# Last reviewed: 2026-04-27.
+# Endpoints added after the 2026-10 docs sync (Chat V2, Responses, models,
+# Dictate, Instant Voice Cloning). Source: docs.sarvam.ai/api-reference/*,
+# reviewed 2026-11-23. Not yet live-tested against api.sarvam.ai.
 # ---------------------------------------------------------------------------
 
-PRICING: dict[str, dict[str, Any]] = {
-    "saaras:v4":            {"unit": "per minute of audio",   "tier": "billed by minute (recommended, latest)"},
-    "saaras:v3":            {"unit": "per minute of audio",   "tier": "billed by minute"},
-    "saaras:v3-realtime":   {"unit": "per minute of audio",   "tier": "billed by minute"},
-    "bulbul:v3":            {"unit": "per character",         "tier": "billed by character"},
-    "bulbul:v4-flash":      {"unit": "per character",         "tier": "billed by character (assumed same unit as bulbul:v3 — docs.sarvam.ai doesn't publish a v4-flash rate yet; confirm on dashboard.sarvam.ai)"},
-    "mayura:v1":            {"unit": "per character",         "tier": "billed by character"},
-    "sarvam-translate:v1":  {"unit": "per character",         "tier": "billed by character"},
-    "sarvam-105b":          {"unit": "per 1M tokens",         "tier": "billed by tokens (flagship). Hidden reasoning tokens count as completion tokens and are billed the same as visible output."},
-    "sarvam-105b-conversations": {"unit": "per 1M tokens",    "tier": "billed by tokens — same rate as sarvam-105b, per docs.sarvam.ai pricing page."},
-    "sarvam-vision":        {"unit": "per page",              "tier": "billed by page"},
-    "sarvam-prism":         {"unit": "per 1M input tokens",   "tier": "billed by input tokens only (output tokens are always 0). Listed at Rs. 4 per 1M input on docs.sarvam.ai; the state is counted once per request however many questions you ask."},
+API_REFERENCE.update({
+    "/v2/chat/completions": {
+        "method": "POST",
+        "model": "sarvam-105b | sarvam-105b-conversations | glm5.3 | glm5.3-flash | gemma4 | deepseekv4.1-flash-1017 | deepseekv4.1-flash-1017-interactive | deepseekv4-pro (provisioned) | kimi-k3.1-pro (provisioned) | qwen38-27b (provisioned)",
+        "content_type": "application/json",
+        "request_body": {
+            "model":              "str, required, case-sensitive (GET /v2/models lists what your key can use)",
+            "messages":           "list, required — roles system|developer|user|assistant|tool. Images only as inline data:image URIs",
+            "temperature":        "float 0-2, default 1",
+            "top_p":              "float >0..1, default 0.95",
+            "max_tokens":         "int, default 2048 (includes reasoning tokens)",
+            "reasoning_effort":   "none|low|medium|high|max — low/high/max on every reasoning model; medium on sarvam-105b, deepseek*, kimi-k3.1-pro (runs as high), qwen38-27b; none only on deepseek* and qwen38-27b (kimi-k3.1-pro 400s; glm5.3/glm5.3-flash keep thinking). Default max on glm5.3/kimi-k3.1-pro, high on glm5.3-flash/deepseek*, off on gemma4; sarvam-105b-conversations ignores it",
+            "n":                  "must be 1 (n>1 -> 400 invalid_request_error)",
+            "stop":               "str | list[str] (up to 4)",
+            "tools / tool_choice / parallel_tool_calls": "function tools only; tool_choice none|auto|required|{function}",
+            "response_format":    "json_object | json_schema (strict defaults false)",
+            "top_k":              "-1 or >=1 (0 rejected); not on glm5.3",
+            "repetition_penalty": ">0 and <=2",
+            "logprobs / top_logprobs": "not supported on glm5.3 or kimi-k3.1-pro",
+            "stream / stream_options": "stream_options.include_usage only with stream:true",
+        },
+        "headers": "api-subscription-key (required); optional x-session-affinity for multi-turn routing",
+        "notes": (
+            "Body limit 10,485,760 bytes. Errors: 400, 402 (credits), 403 (invalid keys appear as 403), "
+            "404 (unknown model / no provisioned access), 413, 429, 502 model_call_failed, 503 model_overloaded. "
+            "PROVISIONED THROUGHPUT models (deepseekv4-pro, kimi-k3.1-pro, qwen38-27b; also clef and "
+            "embeddinggemma-2 on other endpoints) are enabled per organisation — contact Sarvam support "
+            "(support@sarvam.ai, https://docs.sarvam.ai/api/getting-started/help) with the model and your expected volume. "
+            "Without access deepseekv4-pro returns 400 invalid_request_error ('…runs on Provisioned Throughput and is not "
+            "enabled for your organisation') and is still listed by GET /v2/models; the others return 404 not_found_error "
+            "and are NOT listed. "
+            "Per-model rules: reasoning_effort none only on deepseekv4.1-flash-1017[-interactive]/deepseekv4-pro/qwen38-27b "
+            "(glm5.3, glm5.3-flash, kimi-k3.1-pro always think; gemma4 off unless set); logprobs 400 on glm5.3 and "
+            "kimi-k3.1-pro; image input (inline data: URIs only) on glm5.3-flash, gemma4, deepseekv4.1-flash-1017*, "
+            "kimi-k3.1-pro (also video), qwen38-27b; stop: sarvam-105b/glm5.3/gemma4 max 4 (400), others accept more; "
+            "only gemma4 honours x-session-affinity; qwen38-27b structured output needs reasoning_effort none; "
+            "max_tokens default 2048 on glm5.3 only (set it explicitly — reasoning counts against it); "
+            "body limit 10 MiB (32 MiB deepseekv4.1-flash-1017); auth failures are 403 not 401. "
+            "Context: sarvam-105b 128K; glm5.3/glm5.3-flash/deepseek/kimi 1M; gemma4/qwen38-27b 256K."
+        ),
+    },
+    "/v2/responses": {
+        "method": "POST",
+        "model": "sarvam-105b | sarvam-105b-conversations | glm5.3 | glm5.3-flash | gemma4 | deepseekv4.1-flash-1017 | deepseekv4.1-flash-1017-interactive | deepseekv4-pro | kimi-k3.1-pro | qwen38-27b (provisioned models need org access — contact Sarvam support)",
+        "content_type": "application/json",
+        "request_body": {
+            "model":             "str, required",
+            "input":             "str | list of items, required",
+            "instructions":      "str",
+            "max_output_tokens": "int — no default cap; always set it",
+            "reasoning":         "{effort: none|low|medium|high|max (per model), summary: auto|detailed}",
+            "tools":             "FLAT shape {type:'function', name, description, parameters, strict}; the nested chat shape -> 400",
+            "text":              "{format: {type: text|json_object|json_schema}}",
+            "stream":            "bool; ends on response.completed|incomplete|failed (no [DONE])",
+        },
+        "notes": (
+            "Stateless: store must be false/omitted; previous_response_id, conversation, background:true, "
+            "max_tool_calls, prompt, item_reference -> 400; GET /v2/responses/{id} always 404. "
+            "n and seed are ignored (open-weight models return 400 for n, even n=1) and open-weight models reject stop. "
+            "glm5.3 / glm5.3-flash accept only low|high. top_k unsupported on glm5.3. Logprobs: send top_logprobs with "
+            "include=['message.output_text.logprobs'] (400 on glm5.3, gemma4, kimi-k3.1-pro). GET /v2/responses and "
+            "DELETE /v2/responses/{id} return 405."
+        ),
+    },
+    "/v2/embeddings": {
+        "method": "POST",
+        "model": "embeddinggemma-2 (Provisioned Throughput)",
+        "content_type": "application/json",
+        "request_body": {
+            "model":           "str, required — 'embeddinggemma-2'",
+            "input":           "str | list[str], required — each up to 8,192 tokens; an empty list -> 400",
+            "encoding_format": "float (default) | base64 (768 little-endian float32). bytes / bytes_only / int8 -> 400",
+            "dimensions":      "NOT supported — any value -> 400. Truncate to the first N values and re-normalise yourself",
+        },
+        "response": {
+            "data": "list of {object:'embedding', index, embedding:[768 floats]} in input order",
+            "usage": "{prompt_tokens, total_tokens, completion_tokens:0}",
+        },
+        "notes": (
+            "OpenAI-compatible. The API adds NO task prefix — prepend one yourself: "
+            "'task: search result | query: ' (queries), 'title: none | text: ' (documents), "
+            "'task: question answering | query: ', 'task: fact checking | query: ', "
+            "'task: classification | query: ', 'task: clustering | query: ', "
+            "'task: sentence similarity | query: ', 'task: code retrieval | query: '. "
+            "Billed INR 2 per 1M input tokens. The path is documented on the model page but is not yet in the public OpenAPI spec."
+        ),
+    },
+    "/v2/models": {
+        "method": "GET",
+        "content_type": "-",
+        "response": {"data": "list of {id, created, owned_by, access: standard|provisioned}"},
+        "notes": (
+            "Also GET /v2/models/{model_id}. deepseekv4-pro is listed for every key (400 without access); "
+            "kimi-k3.1-pro, qwen38-27b, clef and embeddinggemma-2 appear only once Sarvam has enabled "
+            "Provisioned Throughput for your org (contact support)."
+        ),
+    },
+    "/v2/dictate": {
+        "method": "POST",
+        "model": "dictate-v1 (alias of dictate-v1-2026-11-04; also dictate-v1-2026-11-05)",
+        "content_type": "multipart/form-data",
+        "request_body": {
+            "file":          "file, required — <=30 s, <=10,000,000 bytes (WAV, MP3, AAC, AIFF, OGG, Opus, FLAC, MP4/M4A, AMR, WMA, WebM)",
+            "language_code": "auto (default) | hi-IN, bn-IN, kn-IN, ml-IN, mr-IN, or-IN (Odia), pa-IN, ta-IN, te-IN, en-IN, gu-IN, as-IN, ur-IN, ne-IN, kok-IN, ks-IN, sd-IN, sa-IN, sat-IN, mni-IN, brx-IN, mai-IN, doi-IN",
+            "mode":          "transcribe (default) | verbatim | translit | codemix",
+            "style":         "JSON {preset: none|light|clean, rules: str<=2000}; prefix/suffix -> 400",
+            "vocabulary":    "JSON list (<=1000) of {word 1-64, sounds_like[<=5], description<=200}",
+            "context":       "JSON {text<=2000, reference<=50000}",
+            "output_rules":  "str<=4000 — derive an extra `output` from the whole recording",
+            "model":         "str — pin a snapshot",
+        },
+        "response": {"text": "finished text", "transcript": "raw", "corrections": "[{heard, wrote, source}]", "degraded": "llm_timeout|llm_error|llm_guard_failed|llm_context_limit|asr_error|asr_timeout|null", "usage": "{audio_duration_s, words, llm_input_tokens, llm_output_tokens}", "output": "only with output_rules"},
+        "notes": (
+            "Send options as multipart FORM PARTS holding JSON text — query params are ignored and empty-string "
+            "parts return 400. Each non-file part <=1 MiB; body <=12,097,152 bytes; no trailing slash. "
+            "Billed per minute incl. silence. Long audio: POST /v2/dictate/jobs (<=1 h)."
+        ),
+    },
+    "/v2/dictate/jobs": {
+        "method": "POST (create) | GET /v2/dictate/jobs/{job_id} (poll)",
+        "content_type": "multipart/form-data (Content-Length required)",
+        "request_body": {
+            "file | audio_url": "exactly one. file: gateway 413 at ~100 MB; audio_url: https, port 443/8443, no private addresses, <=3 redirects",
+            "language_code / mode / style / vocabulary / context / output_rules / model": "as /v2/dictate",
+            "callback":         "JSON {url (https, 443/8443, no redirects), auth_token (1-4096 printable ASCII; sent as X-SARVAM-JOB-CALLBACK-TOKEN)}",
+        },
+        "response": {"create": "202 {job_id, job_state}", "poll": "{job_state Accepted|Pending|Running|Completed|Failed, created_at, completed_at, expires_at (7 days after completion, then 404), error{code,message}, result{...as /v2/dictate plus segments, sections}}"},
+        "notes": "Each POST creates a new billed job (no idempotency key). A Failed job still returns HTTP 200. Poll every 5 s or slower. Live WebSocket sessions last up to 3 hours, 60 s idle timeout.",
+    },
+    "/voices/create": {
+        "method": "POST",
+        "model": "Sarvam Instant Voice Cloning (beta)",
+        "content_type": "multipart/form-data",
+        "request_body": {
+            "file":     "file, required — WAV/MP3/FLAC/OPUS/AAC/MULAW/ALAW/LINEAR16, <=50 MB, ideally 10-15 s single speaker",
+            "name":     "str 1-100, required",
+            "language": "BCP-47 of the reference audio, required",
+            "style / gender": "optional labels",
+            "remove_background_noise": "bool, default true",
+        },
+        "response": {"data": "{voice_id (svc-<uuid>), status, reference_text, background_noise_removed}"},
+        "notes": "Rejected Studio-only fields (400): consent, passage_id, noise_reduction, enable_noise_reduction, accent, ref_text. 403 TIER_LIMIT_REACHED at the org voice cap (50 on Starter); 422 if audio fails quality/ASR checks. Also: GET /voices (list: search, gender, accent, limit<=200, offset), GET /voices/{id}, DELETE /voices/delete/{id} (204).",
+    },
+    "/voices/clone": {
+        "method": "POST",
+        "model": "Sarvam Instant Voice Cloning (beta)",
+        "content_type": "multipart/form-data",
+        "request_body": {
+            "voice_id | ref_audio": "exactly one (400 otherwise). ref_audio <=10 MB, <=15 s",
+            "text":                 "str, required, <=1000 chars",
+            "language_code":        "as/bn/en/gu/hi/kn/ml/mr/od/pa/ta/te -IN; optional (auto-detected from text)",
+            "pace":                 "0.5-2.0; mutually exclusive with max_audio_duration",
+            "output_audio_codec":   "wav (default) | mp3 | flac | opus | aac | linear16 | mulaw | alaw",
+            "speech_sample_rate":   "8000..48000, default 24000; opus needs 8000/16000/24000/48000",
+            "enable_qc / enable_vad / remove_background_noise / enable_text_normalization": "bools (vad default true; noise removal only with ref_audio, API default false here)",
+            "min_audio_duration / max_audio_duration": "seconds; max >= min",
+        },
+        "response": {"audio_b64": "base64 audio", "audio_duration": "seconds", "request_id": "str"},
+        "notes": "Also /voices/clone/stream (HTTP) and a WebSocket variant. language_code became optional 2026-10-26. 1000-char text limit (400 above).",
+    },
+    "/voices/watermark/detect": {
+        "method": "POST",
+        "content_type": "multipart/form-data",
+        "request_body": {"file": "WAV/MP3/FLAC/OGG/M4A/WebM, <=10 MB, first 120 s analysed"},
+        "response": {"data": "{verdict: watermarked|not_detected|inconclusive, z_score, n_pairs_scored, analysed_seconds, algorithm_version, inconclusive, probability, p_value}"},
+        "notes": "5 requests/minute; free. Clips under ~5 s are usually inconclusive; z_score above ~3.5 is typically watermarked.",
+    },
+})
+
+
+# ---------------------------------------------------------------------------
+# Pricing — INR, excluding GST. Source: docs.sarvam.ai/api/getting-started/pricing
+# Last reviewed against the docs: 2026-11-23.
+# Per-plan keys: payg (Pay as you go) | pro | growth | business (only where the
+# docs publish one). Token models are priced per 1M tokens and are identical on
+# every plan. Always direct end users to the dashboard for their live rate.
+# ---------------------------------------------------------------------------
+
+PLANS: dict[str, dict[str, Any]] = {
+    "payg":       {"name": "Pay as you go", "monthly_fee_inr": 0,        "support": "Community"},
+    "pro":        {"name": "Pro",           "monthly_fee_inr": 9999,     "support": "Email"},
+    "growth":     {"name": "Growth",        "monthly_fee_inr": 49999,    "support": "Email"},
+    "business":   {"name": "Business",      "monthly_fee_inr": 199999,   "support": "Priority",
+                   "note": "Includes INR 1,99,999 of credits and the best public API rates. No public rate limits."},
+    "enterprise": {"name": "Enterprise",    "monthly_fee_inr": None,     "support": "Dedicated"},
 }
 
-PRICING_DISCLAIMER = (
-    "This is a high-level pricing structure; exact per-unit rates depend on "
-    "your Sarvam plan and may have changed since last update. ALWAYS confirm "
-    "current rates at https://dashboard.sarvam.ai → Billing before quoting "
-    "production-bound numbers. New users receive Rs. 1000 in free credits."
+
+def _per_plan(payg: float, pro: float, growth: float, business: float | None = None) -> dict[str, float]:
+    rates = {"payg": payg, "pro": pro, "growth": growth}
+    if business is not None:
+        rates["business"] = business
+    return rates
+
+
+def _tokens(inp: float, cached: float | None, out: float | None, note: str) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "unit": "per 1M tokens",
+        "rates_inr": {"input": inp, "cached_input": cached, "output": out},
+        "same_on_all_plans": True,
+        "access": "provisioned" if note.startswith("Provisioned Throughput") else "serverless",
+        "tier": note,
+    }
+    if entry["access"] == "provisioned":
+        entry["how_to_get_access"] = (
+            "Enabled per organisation — contact Sarvam support (support@sarvam.ai, "
+            "https://docs.sarvam.ai/api/getting-started/help) with the model and your expected volume."
+        )
+    return entry
+
+
+PRICING: dict[str, dict[str, Any]] = {
+    # Speech
+    "saaras:v4":            {"unit": "per minute of audio", "rates_inr_by_plan": _per_plan(0.49, 0.45, 0.41),
+                             "tier": "recommended, latest. Same rate for REST, streaming and batch"},
+    "saaras:v3":            {"unit": "per minute of audio", "rates_inr_by_plan": _per_plan(0.49, 0.45, 0.41), "tier": "legacy"},
+    "saaras:v3-realtime":   {"unit": "per minute of audio", "rates_inr_by_plan": _per_plan(0.49, 0.45, 0.41), "tier": "streaming"},
+    "saaras:v4+diarization": {"unit": "per minute of audio", "rates_inr_by_plan": _per_plan(0.59, 0.54, 0.50),
+                             "tier": "batch STT with with_diarization=true"},
+    "bulbul:v3":            {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(3.00, 2.85, 2.70),
+                             "tier": "API default model. Bulbul V3 reaches end of life on Voice Agents on 2026-11-25 but stays on the TTS API"},
+    "bulbul:v4-flash":      {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(2.00, 1.85, 1.70), "tier": "latest"},
+    "instant-voice-cloning": {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(2.00, 2.00, 2.00),
+                             "tier": "beta. /voices/watermark/detect is free"},
+    "dictate":              {"unit": "per minute of audio (silence included)",
+                             "rates_inr_by_plan": _per_plan(0.50, 0.475, 0.45, 0.40),
+                             "tier": "clip, job and live socket. Failed calls and degraded results are not billed"},
+    # Text
+    "mayura:v1":            {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(2.00, 1.70, 1.50),
+                             "tier": "Translate, formal and colloquial"},
+    "sarvam-translate:v1":  {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(2.00, 1.70, 1.50),
+                             "tier": "Translate (same published Translate rate)"},
+    "transliterate":        {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(2.00, 2.00, 1.80), "tier": "/transliterate"},
+    "language-identification": {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(0.35, 0.35, 0.31), "tier": "/text-lid"},
+    # Document AI
+    "sarvam-vision":        {"unit": "per page", "rates_inr_by_plan": _per_plan(0.50, 0.50, 0.50),
+                             "tier": "Document digitization / parse"},
+    "doc-extract-basic":    {"unit": "per page", "rates_inr_by_plan": _per_plan(1.00, 1.00, 1.00), "tier": "extract mode=basic"},
+    "doc-extract-advanced": {"unit": "per page", "rates_inr_by_plan": _per_plan(2.50, 2.50, 2.50), "tier": "extract mode=advanced"},
+    "document-translation": {"unit": "per 1,000 billable characters, per target language",
+                             "rates_inr_by_plan": _per_plan(5.00, 5.00, 4.50),
+                             "tier": "rounded up to the nearest rupee, minimum INR 1"},
+    "dubbing":              {"unit": "per minute of source media x target languages",
+                             "rates_inr_by_plan": _per_plan(40, 40, 38), "tier": "editor_flow=false"},
+    "dubbing-editor-flow":  {"unit": "per minute of source media x target languages",
+                             "rates_inr_by_plan": _per_plan(80, 80, 75), "tier": "editor_flow=true"},
+    # LLMs (INR per 1M tokens; reasoning tokens bill as output)
+    "sarvam-105b":          _tokens(10, 0.25, 25, "serverless. Introductory pricing through the end of 2026"),
+    "sarvam-105b-conversations": _tokens(10, 0.25, 25, "serverless. Same rate as sarvam-105b; introductory pricing through the end of 2026"),
+    "sarvam-prism":         _tokens(4, None, 0, "serverless. Input tokens only; the state is billed once per request however many questions you ask"),
+    "glm5.3":               _tokens(126, 20, 390, "serverless"),
+    "glm5.3-flash":         _tokens(13.5, 2.5, 45, "serverless"),
+    "gemma4":               _tokens(35, 10, 90, "serverless (Gemma 4 31B)"),
+    "deepseekv4.1-flash-1017": _tokens(14, 0.25, 55, "serverless. Cut from 25/0.5/105 on 2026-11-07; introductory pricing through the end of 2026"),
+    "deepseekv4.1-flash-1017-interactive": _tokens(25, 0.5, 105, "serverless. >200 tokens/s (about 80 on the standard model)"),
+    "deepseekv4-pro":       _tokens(115, 4, 350, "Provisioned Throughput — enabled per org (contact support)"),
+    "kimi-k3.1-pro":        _tokens(200, 20, 950, "Provisioned Throughput — enabled per org (contact support)"),
+    "qwen38-27b":           _tokens(18, 5, 230, "Provisioned Throughput — enabled per org (contact support)"),
+    "clef":                 _tokens(20, None, None, "Provisioned Throughput decision model (contact support), billed on input only"),
+    "embeddinggemma-2":     _tokens(2, None, None, "Provisioned Throughput (contact support), billed on input only, POST /v2/embeddings"),
+}
+
+PROVISIONED_THROUGHPUT_NOTE = (
+    "Provisioned Throughput models (deepseekv4-pro, kimi-k3.1-pro, qwen38-27b, clef, embeddinggemma-2) "
+    "are NOT self-serve: capacity is set up for your workload and enabled per organisation. Contact "
+    "Sarvam support (support@sarvam.ai, https://docs.sarvam.ai/api/getting-started/help) with the model "
+    "you need and your expected volume. Without access deepseekv4-pro returns 400 and the others 404."
 )
 
+PRICING_DISCLAIMER = (
+    "Prices are in INR, exclude GST, and mirror docs.sarvam.ai/api/getting-started/pricing "
+    "as of 2026-11-23. Introductory pricing on sarvam-105b, sarvam-105b-conversations and "
+    "deepseekv4.1-flash-1017 runs through the end of 2026. Credits never expire; new verified "
+    "users receive INR 100 of free credits. Exhausted credits return HTTP 402 "
+    "(insufficient_quota_error), which is separate from 429. Confirm live rates at "
+    "https://dashboard.sarvam.ai (billing) before quoting production numbers."
+)
+
+# Deprecated / removed — do not recommend.
+DEPRECATED_MODELS: dict[str, str] = {
+    "sarvam-m": "Deprecated and no longer served — use sarvam-105b.",
+    "sarvam-30b": "Deprecated — use sarvam-105b.",
+    "saaras:v2.5": "Deprecated — use saaras:v4.",
+    "kimi-k3": "No longer offered (2026-11-06) — use kimi-k3.1-pro or glm5.3-flash.",
+    "mimo-v2.6-flash": "No longer offered (2026-11-06) — use glm5.3-flash for the lowest price.",
+    "mimo-v2.6-pro": "No longer offered (2026-11-06).",
+}
+
 
 # ---------------------------------------------------------------------------
-# Rate limits — platform defaults (may vary by plan/contract).
+# Rate limits — per plan, per API. Source: docs.sarvam.ai/api/getting-started/pricing#rate-limits
+# Last reviewed against the docs: 2026-11-23. Business has no published limits
+# (limits above Growth need an Enterprise arrangement).
+# Units: "req/min" requests per minute; "concurrent" open connections.
 # ---------------------------------------------------------------------------
+
+def _limit(payg: int, pro: int, growth: int, unit: str = "req/min", **extra: Any) -> dict[str, Any]:
+    return {"unit": unit, "payg": payg, "pro": pro, "growth": growth, **extra}
+
 
 RATE_LIMITS: dict[str, dict[str, Any]] = {
-    "general": {
-        "requests_per_minute": 60,
-        "description": "Default rate limit for most endpoints",
-    },
-    "translate": {
-        "requests_per_minute": 300,
-        "description": "Higher limit for /translate endpoint",
-    },
-    "platform": {
-        "requests_per_minute": 5000,
-        "description": "Platform-wide aggregate limit",
-    },
+    "stt_rest":            _limit(60, 100, 4000),
+    "stt_websocket":       _limit(20, 100, 100, "concurrent"),
+    "stt_batch":           _limit(20, 100, 500, note="Poll no faster than your plan allows (SDK default 5 s)."),
+    "tts_rest_and_http_stream": _limit(60, 200, 1000, note="bulbul:v3 and bulbul:v4-flash"),
+    "tts_websocket":       _limit(60, 200, 1000, "concurrent"),
+    "dictate_clip":        _limit(60, 100, 4000, note="POST /v2/dictate"),
+    "dictate_jobs":        _limit(20, 100, 500, note="create, read, delete. Poll every 5 s or slower."),
+    "dictate_live_websocket": _limit(20, 100, 100, "concurrent", note="Session lasts up to 3 hours; closes after 60 s with no client message."),
+    "voice_cloning":       {"unit": "req/min (burst)", "payg": "60 (burst 100)", "pro": "200 (burst 300)", "growth": "1000 (burst 1200)"},
+    "voice_watermark_detect": {"unit": "req/min", "all_plans": 5, "note": "Free, consumes no credits."},
+    "translate_transliterate_lid": _limit(60, 200, 1000, note="POST /translate, /transliterate, /text-lid"),
+    "llm_default":         _limit(50, 200, 1000, note="gemma4, glm5.3, deepseekv4.1-flash-1017"),
+    "llm_sarvam_105b":     _limit(60, 200, 300, note="sarvam-105b and sarvam-105b-conversations"),
+    "dubbing":             _limit(5, 50, 300),
+    "doc_ai_parse":        _limit(200, 300, 400, pages_per_request=20),
+    "doc_ai_extract":      _limit(30, 50, 60, pages_per_request=500),
+    "doc_ai_split":        _limit(60, 120, 180, pages_per_request=500),
+    "doc_ai_classify":     _limit(100, 150, 200, pages_per_request=20),
+    "document_translation": _limit(200, 500, 1000, pages_per_request=500, note="Document Translation job endpoints. Poll live-status every 10-15 s."),
 }
 
 RATE_LIMITS_DISCLAIMER = (
-    "These are default rate limits and may vary based on your Sarvam plan. "
-    "Check https://dashboard.sarvam.ai for your account-specific limits."
+    "Limits are the published per-plan defaults (docs.sarvam.ai, reviewed 2026-11-23). Exceeding "
+    "them returns 429 rate_limit_exceeded_error; 503 means load shedding — retry both with "
+    "exponential backoff. The docs disagree on scope (per account in the pricing page, per API key "
+    "on the Token Factory page); treat them as per account to be safe. Business has no published "
+    "limits. Document AI page limits are authoritative via GET /doc-ai/v1/capabilities. "
+    "PENDING DOCS CHANGE: sarvamai/sarvam-fern-config PR #784 (open, unmerged as of 2026-11-23) "
+    "proposes new limits — STT/TTS REST+WebSocket 150/200/1,000/4,000 req/min (PAYG/Pro/Growth/Business), "
+    "Sarvam-105B Growth 1,000, Voice Cloning 60/200/300/1,000, Prism/Clef/EmbeddingGemma 120/500/1,200/2,000, "
+    "and a Business column everywhere. Until it merges the table above is what docs.sarvam.ai publishes."
 )

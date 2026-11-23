@@ -14,11 +14,16 @@ from typing import Any, Literal
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
+from sarvam_mcp.http.errors import SarvamAPIError
 from sarvam_mcp.observability import measure_tool
+from sarvam_mcp.tools._chat_models import provisioned_access_error
 from sarvam_mcp.tools._common import ready_ctx
 
 PRISM_PATH = "/v2/systemone"
 PRISM_MODEL = "sarvam-prism"
+# `clef` is Provisioned Throughput (enabled per org); it also reads base64 images and
+# takes up to 65,536 tokens per request (sarvam-prism: 32,768 per question).
+PrismModel = Literal["sarvam-prism", "clef"]
 
 QuestionKind = Literal["noul", "choice", "score"]
 _QUESTION_KEYS = {"type", "instructions", "criteria"}
@@ -74,26 +79,63 @@ def register(mcp: FastMCP) -> None:
                 "'criteria': ['Can wait', 'Needs a reply today', 'Needs action now']}}"
             ),
         ),
+        images: list[str] | None = Field(
+            default=None,
+            description=(
+                "clef only: base64 data URIs, e.g. ['data:image/jpeg;base64,/9j/…']. Remote http(s) "
+                "image URLs are a 400; sarvam-prism refuses images (422)."
+            ),
+        ),
+        model: PrismModel = Field(
+            default="sarvam-prism",
+            description=(
+                "`sarvam-prism` (serverless, default) or `clef` (PROVISIONED THROUGHPUT — enabled per "
+                "organisation; contact Sarvam support at support@sarvam.ai to get access; "
+                "reads images, 1-255 options, up to 65,536 tokens/request)."
+            ),
+        ),
     ) -> dict[str, Any]:
-        _validate_questions(questions)
+        _validate_questions(questions, model)
+        if images:
+            if model != "clef":
+                raise ValueError("Only clef reads images; sarvam-prism refuses them (422).")
+            bad = [i[:30] for i in images if not i.startswith("data:image/")]
+            if bad:
+                raise ValueError(
+                    "images must be base64 data URIs (data:image/…;base64,…); remote http(s) URLs "
+                    f"return 400. Offending: {bad[:2]}"
+                )
         sc = await ready_ctx(ctx)
         with measure_tool() as metrics:
-            payload, call = await sc.client.post_json(
-                PRISM_PATH,
-                json_body={"model": PRISM_MODEL, "state": state, "questions": questions},
-            )
+            try:
+                payload, call = await sc.client.post_json(
+                    PRISM_PATH,
+                    json_body={
+                        "model": model,
+                        "state": state,
+                        "questions": questions,
+                        **({"images": images} if images else {}),
+                    },
+                )
+            except SarvamAPIError as exc:
+                better = provisioned_access_error(exc, model)
+                if better is not None:
+                    raise better from exc
+                raise
             metrics.merge(call)
 
         body = payload if isinstance(payload, dict) else {}
         return {
-            "model": body.get("model", PRISM_MODEL),
+            "model": body.get("model", model),
             "answers": body.get("answers"),
             "usage": body.get("usage"),
             "observability": metrics.to_response_block(),
         }
 
 
-def _validate_questions(questions: dict[str, dict[str, Any]]) -> None:
+def _validate_questions(
+    questions: dict[str, dict[str, Any]], model: str = PRISM_MODEL
+) -> None:
     """Reject what the API would 422 on, before spending a call."""
     if not questions:
         raise ValueError("Provide at least one question.")
@@ -112,6 +154,8 @@ def _validate_questions(questions: dict[str, dict[str, Any]]) -> None:
                 raise ValueError(f"{where}: 'noul' criteria must be an object with 'true' and 'false'.")
         elif kind == "choice":
             lo, hi = _CHOICE_OPTIONS
+            if model == "clef":
+                lo = 1  # clef allows 1-255 options
             if not isinstance(criteria, dict) or not lo <= len(criteria) <= hi:
                 raise ValueError(
                     f"{where}: 'choice' needs criteria as an object of option id -> "
@@ -119,6 +163,8 @@ def _validate_questions(questions: dict[str, dict[str, Any]]) -> None:
                 )
         elif kind == "score":
             lo, hi = _SCORE_LEVELS
+            if model == "clef":
+                lo = 1  # clef allows 1-10 levels
             if not isinstance(criteria, list) or not lo <= len(criteria) <= hi:
                 raise ValueError(
                     f"{where}: 'score' needs criteria as a list of {lo}-{hi} level "

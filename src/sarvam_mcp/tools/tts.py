@@ -33,6 +33,21 @@ WS_MAX_STREAM_SECONDS = 60.0
 
 SampleRate = Literal[8000, 16000, 22050, 24000, 32000, 44100, 48000]
 
+# REST output codecs documented at docs.sarvam.ai/api-reference/text-to-speech/convert.
+# `opus` is only valid at 8000/16000/24000/48000 Hz (22050 returns 400).
+OutputCodec = Literal["wav", "mp3", "linear16", "mulaw", "alaw", "opus", "flac", "aac"]
+_CODEC_EXT = {
+    "wav": ("wav", "audio/wav"),
+    "mp3": ("mp3", "audio/mpeg"),
+    "linear16": ("pcm", "audio/L16"),
+    "mulaw": ("ulaw", "audio/basic"),
+    "alaw": ("alaw", "audio/x-alaw-basic"),
+    "opus": ("opus", "audio/opus"),
+    "flac": ("flac", "audio/flac"),
+    "aac": ("aac", "audio/aac"),
+}
+_OPUS_RATES = {8000, 16000, 24000, 48000}
+
 
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
@@ -68,7 +83,11 @@ def register(mcp: FastMCP) -> None:
             ),
         ),
         speech_sample_rate: SampleRate = Field(
-            default=24000, description="PCM sample rate of the output WAV."
+            default=22050,
+            description=(
+                "Output sample rate in Hz (API default 22050). REST accepts 8000-48000; "
+                "streaming accepts only 8000/16000/22050/24000."
+            ),
         ),
         pace: float = Field(default=1.0, ge=0.5, le=2.0),
         pitch: float | None = Field(
@@ -80,8 +99,11 @@ def register(mcp: FastMCP) -> None:
             description="Output gain, 0.1 to 2.5. Omit for default loudness.",
         ),
         enable_preprocessing: bool = Field(
-            default=True,
-            description="Normalize numbers/dates/code-mixed segments before synthesis.",
+            default=False,
+            description=(
+                "Normalize English words and numeric entities (numbers, dates) before "
+                "synthesis. API default false; accepted on both models."
+            ),
         ),
         model: TtsModel = Field(
             default="bulbul:v3",
@@ -97,12 +119,29 @@ def register(mcp: FastMCP) -> None:
                 "to apply during synthesis, for custom word pronunciations."
             ),
         ),
+        output_audio_codec: OutputCodec = Field(
+            default="wav",
+            description=(
+                "Output codec: wav (default), mp3, linear16, mulaw, alaw, opus, flac, aac. "
+                "`opus` needs speech_sample_rate 8000/16000/24000/48000."
+            ),
+        ),
+        temperature: float | None = Field(
+            default=None, ge=0.01, le=1.0,
+            description="Sampling temperature 0.01-1.0 (API default 0.6). Omit to use the default.",
+        ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         speaker = resolve_tts_speaker(model, speaker)
+        if output_audio_codec == "opus" and speech_sample_rate not in _OPUS_RATES:
+            raise ValueError(
+                "output_audio_codec='opus' requires speech_sample_rate of 8000, 16000, "
+                f"24000 or 48000 (got {speech_sample_rate})."
+            )
         body: dict[str, Any] = {
             "text": text,
-            "target_language_code": target_language_code,
+            # Documented request field is `language_code` (docs.sarvam.ai TTS reference).
+            "language_code": target_language_code,
             "speaker": speaker,
             "speech_sample_rate": speech_sample_rate,
             "pace": pace,
@@ -118,6 +157,10 @@ def register(mcp: FastMCP) -> None:
             body["loudness"] = loudness
         if dict_id is not None:
             body["dict_id"] = dict_id
+        if output_audio_codec != "wav":
+            body["output_audio_codec"] = output_audio_codec
+        if temperature is not None:
+            body["temperature"] = temperature
 
         with measure_tool() as metrics:
             payload, call = await sc.client.post_json(TTS_PATH, json_body=body)
@@ -129,9 +172,10 @@ def register(mcp: FastMCP) -> None:
             raise RuntimeError(f"TTS response had no audio. Raw: {payload!r}")
         wav_bytes = base64.b64decode(audios[0])
 
-        filename = f"sarvam-tts-{uuid.uuid4().hex[:8]}.wav"
+        ext, mime = _CODEC_EXT[output_audio_codec]
+        filename = f"sarvam-tts-{uuid.uuid4().hex[:8]}.{ext}"
         stored = await sc.audio_sink.store(
-            wav_bytes, filename=filename, mime_type="audio/wav"
+            wav_bytes, filename=filename, mime_type=mime
         )
 
         return {
@@ -222,9 +266,9 @@ def register(mcp: FastMCP) -> None:
                     TTS_PATH,
                     json_body={
                         "text": text,
-                        "target_language_code": target_language_code,
+                        "language_code": target_language_code,
                         "speaker": speaker,
-                        "speech_sample_rate": 24000,
+                        "speech_sample_rate": 22050,
                         "pace": pace,
                         "model": model,
                         **({"pitch": pitch} if pitch is not None else {}),

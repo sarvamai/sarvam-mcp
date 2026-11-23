@@ -21,6 +21,7 @@ from sarvam_mcp.http.errors import (
     SarvamAuthError,
     SarvamBadRequestError,
     SarvamConnectionError,
+    SarvamQuotaError,
     SarvamRateLimitError,
 )
 from sarvam_mcp.http.retry import retry_async
@@ -57,9 +58,10 @@ class SarvamClient:
         *,
         json_body: Mapping[str, Any],
         scope: str | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> tuple[Any, CallMetrics]:
         return await self._do_request(
-            "POST", path, json=dict(json_body), scope=scope
+            "POST", path, json=dict(json_body), scope=scope, extra_headers=headers
         )
 
     async def post_multipart(
@@ -75,6 +77,24 @@ class SarvamClient:
             path,
             data=dict(data) if data else None,
             files=dict(files) if files else None,
+            scope=scope,
+        )
+
+    async def put_multipart(
+        self,
+        path: str,
+        *,
+        data: Mapping[str, Any] | None = None,
+        files: Mapping[str, Any] | None = None,
+        params: Mapping[str, Any] | None = None,
+        scope: str | None = None,
+    ) -> tuple[Any, CallMetrics]:
+        return await self._do_request(
+            "PUT",
+            path,
+            data=dict(data) if data else None,
+            files=dict(files) if files else None,
+            params=dict(params) if params else None,
             scope=scope,
         )
 
@@ -193,9 +213,12 @@ class SarvamClient:
         files: Mapping[str, Any] | None = None,
         params: Mapping[str, Any] | None = None,
         scope: str | None = None,
+        extra_headers: Mapping[str, str] | None = None,
     ) -> tuple[Any, CallMetrics]:
         provider = current_auth()
         auth_headers = await provider.headers(scope=scope)
+        if extra_headers:
+            auth_headers = {**auth_headers, **extra_headers}
 
         async def send() -> httpx.Response:
             resp = await self._client.request(
@@ -254,6 +277,12 @@ class SarvamClient:
         )
         if response.status_code in (401, 403):
             raise SarvamAuthError(message, **kwargs)
+        if response.status_code == 402:
+            raise SarvamQuotaError(
+                f"{message} — Sarvam credits are exhausted. Add credits or upgrade "
+                "your plan at https://dashboard.sarvam.ai (billing).",
+                **kwargs,
+            )
         if response.status_code == 400:
             raise SarvamBadRequestError(message, **kwargs)
         if response.status_code == 429:

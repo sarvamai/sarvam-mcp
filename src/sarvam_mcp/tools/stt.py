@@ -36,7 +36,14 @@ SttMode = Literal["transcribe", "translate", "verbatim", "translit", "codemix"]
 RealtimeModel = Literal["saaras:v3-realtime", "saaras:v4"]
 StreamType = Literal["fast", "balanced", "simulated"]
 
-InputAudioCodec = Literal["pcm_s16le", "pcm_l16", "pcm_raw"]
+# Full documented enum (docs.sarvam.ai /speech-to-text `input_audio_codec`). The API detects
+# most formats on its own; this is REQUIRED only for raw PCM (pcm_s16le | pcm_l16 | pcm_raw),
+# which is supported at 16 kHz only.
+InputAudioCodec = Literal[
+    "wav", "x-wav", "wave", "mp3", "mpeg", "mpeg3", "x-mp3", "x-mpeg-3", "aac", "x-aac",
+    "aiff", "x-aiff", "ogg", "opus", "flac", "x-flac", "mp4", "x-m4a", "amr", "x-ms-wma",
+    "webm", "pcm_s16le", "pcm_l16", "pcm_raw",
+]
 
 
 def register(mcp: FastMCP) -> None:
@@ -88,17 +95,18 @@ def register(mcp: FastMCP) -> None:
             ),
         ),
         with_timestamps: bool = Field(
-            default=False, description="Include word-level timestamps in the response."
+            default=False, description="Include chunk-level (sentence/phrase) timestamps — "
+            "word-level timestamps are not supported."
         ),
         model: SttModel = Field(
             default="saaras:v4",
-            description="Saaras v4 (recommended, latest STT model for Indic audio). Falls back to saaras:v3 if needed.",
+            description="Saaras v4 (default, recommended, latest). saaras:v3 is legacy — use v4.",
         ),
         input_audio_codec: InputAudioCodec | None = Field(
             default=None,
             description=(
-                "Required only for PCM files. One of 'pcm_s16le', 'pcm_l16', 'pcm_raw'. "
-                "PCM files are supported only at 16kHz sample rate."
+                "Required only for raw PCM: 'pcm_s16le', 'pcm_l16' or 'pcm_raw' (16 kHz only). "
+                "Other formats are auto-detected; any documented codec/format name is accepted."
             ),
         ),
         keyterms: list[str] | None = Field(
@@ -424,7 +432,7 @@ def register(mcp: FastMCP) -> None:
             "GET /speech-to-text-realtime/ws. Use this when you need the realtime "
             "protocol (partials, VAD). Compressed audio and long recordings belong "
             "on sarvam_tools_stt_transcribe or sarvam_tools_stt_batch_submit.\n\n"
-            "Default model is saaras:v3-realtime. saaras:v4 adds keyterms. "
+            "Default model is saaras:v4 (keyterms supported); saaras:v3-realtime is legacy. "
             "`language_code='unknown'` is sent as `auto`."
         ),
     )
@@ -434,7 +442,10 @@ def register(mcp: FastMCP) -> None:
             description="Absolute path to a mono 16-bit PCM WAV at 8 kHz or 16 kHz.",
         ),
         language_code: LanguageCode = Field(default="unknown"),
-        model: RealtimeModel = Field(default="saaras:v3-realtime"),
+        model: RealtimeModel = Field(
+            default="saaras:v4",
+            description="saaras:v4 (default, recommended) or saaras:v3-realtime (legacy).",
+        ),
         mode: SttMode = Field(default="transcribe"),
         stream_type: StreamType = Field(
             default="simulated",

@@ -1,10 +1,11 @@
 """``sarvam_code_*`` documentation tools.
 
-Four tools exposed:
+Five tools exposed (plus snippets/recommend/validate in snippets.py):
   - sarvam_code_api_reference  — endpoint shapes (params, response, gotchas)
   - sarvam_code_languages      — supported language codes per API
   - sarvam_code_speakers       — TTS speakers per model tag
-  - sarvam_code_pricing        — current pricing structure
+  - sarvam_code_pricing        — INR prices per plan (docs-synced)
+  - sarvam_code_rate_limits    — per-plan rate limits per API
 
 Source-of-truth data lives in ``code/_data.py``.
 """
@@ -34,7 +35,16 @@ EndpointPath = Literal[
     "/text-lid",
     "/text-analytics",
     "/v1/chat/completions",
+    "/v2/chat/completions",
+    "/v2/responses",
+    "/v2/models",
+    "/v2/embeddings",
     "/v2/systemone",
+    "/v2/dictate",
+    "/v2/dictate/jobs",
+    "/voices/create",
+    "/voices/clone",
+    "/voices/watermark/detect",
     "/doc-ai/v1/job/parse",
     "/doc-ai/v1/job/extract",
     "/doc-ai/v1/job/classify",
@@ -45,6 +55,7 @@ EndpointPath = Literal[
     "/text-to-speech/ws",
 ]
 TtsModel = Literal["bulbul:v3", "bulbul:v4-flash"]
+Plan = Literal["payg", "pro", "growth", "business"]
 
 
 def register(mcp: FastMCP) -> None:
@@ -124,35 +135,90 @@ def register(mcp: FastMCP) -> None:
         name="sarvam_code_pricing",
         description=(
             "Build-time tool — helps write code that uses Sarvam. For runtime actions, use sarvam_tools_* instead.\n\n"
-            "Current pricing structure for a Sarvam model (or all models if "
-            "omitted). Returns billing unit + rate tier. NOTE: this is a "
-            "high-level structure; exact per-unit rates depend on your plan "
-            "— always confirm at https://dashboard.sarvam.ai before quoting."
+            "INR pricing (excl. GST) for a Sarvam model/API, or all of them if omitted, mirroring "
+            "docs.sarvam.ai/api/getting-started/pricing (reviewed 2026-11-23). Per-minute / per-1,000-char / "
+            "per-page services carry rates for the Pay-as-you-go, Pro, Growth (and where published, Business) "
+            "plans; token models carry input / cached-input / output per 1M tokens. Pass `plan` to get just "
+            "that plan's rate. Also returns plan fees and the deprecated-model list. Confirm live rates at "
+            "https://dashboard.sarvam.ai before quoting."
         ),
     )
     async def sarvam_code_pricing(
         ctx: Context,
         model: str | None = Field(
             default=None,
-            description="Specific model id, e.g. 'bulbul:v3' or 'bulbul:v4-flash'. Omit to list all.",
+            description="Model/API id, e.g. 'bulbul:v4-flash', 'sarvam-105b', 'dictate', 'dubbing'. Omit to list all.",
+        ),
+        plan: Plan | None = Field(
+            default=None,
+            description="payg | pro | growth | business — return only this plan's rate where the rate varies by plan.",
         ),
     ) -> dict[str, Any]:
+        def project(entry: dict[str, Any]) -> dict[str, Any]:
+            by_plan = entry.get("rates_inr_by_plan")
+            if plan and by_plan is not None:
+                out = {k: v for k, v in entry.items() if k != "rates_inr_by_plan"}
+                out["plan"] = plan
+                out["rate_inr"] = by_plan.get(plan)
+                if by_plan.get(plan) is None:
+                    out["rate_note"] = "No published rate for this plan — see the dashboard or contact Sarvam."
+                return out
+            return dict(entry)
+
         if model:
             entry = _data.PRICING.get(model)
             if not entry:
+                deprecated = _data.DEPRECATED_MODELS.get(model)
                 return {
                     "model": model,
                     "found": False,
+                    **({"deprecated": deprecated} if deprecated else {}),
                     "available_models": sorted(_data.PRICING.keys()),
                     "disclaimer": _data.PRICING_DISCLAIMER,
                 }
             return {
                 "model": model,
                 "found": True,
-                **entry,
+                **project(entry),
+                **(
+                    {"provisioned_throughput": _data.PROVISIONED_THROUGHPUT_NOTE}
+                    if entry.get("access") == "provisioned"
+                    else {}
+                ),
                 "disclaimer": _data.PRICING_DISCLAIMER,
             }
         return {
-            "models": _data.PRICING,
+            "plans": _data.PLANS,
+            "provisioned_throughput": _data.PROVISIONED_THROUGHPUT_NOTE,
+            "models": {k: project(v) for k, v in _data.PRICING.items()},
+            "deprecated_models": _data.DEPRECATED_MODELS,
             "disclaimer": _data.PRICING_DISCLAIMER,
         }
+
+    @mcp.tool(
+        name="sarvam_code_rate_limits",
+        description=(
+            "Build-time tool — helps write code that uses Sarvam. For runtime actions, use sarvam_tools_* instead.\n\n"
+            "Published per-plan rate limits (Pay-as-you-go / Pro / Growth) for a Sarvam API, or all if omitted — "
+            "STT, TTS, Dictate, voice cloning, translate, LLMs, dubbing, Document AI. Keys: stt_rest, stt_batch, "
+            "tts_websocket, dictate_clip, llm_sarvam_105b, doc_ai_extract, … Use these to size retry/backoff and "
+            "concurrency. 429 = rate limited, 503 = load shedding, 402 = credits exhausted."
+        ),
+    )
+    async def sarvam_code_rate_limits(
+        ctx: Context,
+        api: str | None = Field(
+            default=None,
+            description="Key such as 'stt_rest', 'tts_websocket', 'llm_sarvam_105b', 'doc_ai_extract'. Omit for all.",
+        ),
+    ) -> dict[str, Any]:
+        if api:
+            entry = _data.RATE_LIMITS.get(api)
+            if not entry:
+                return {
+                    "api": api, "found": False,
+                    "available": sorted(_data.RATE_LIMITS.keys()),
+                    "disclaimer": _data.RATE_LIMITS_DISCLAIMER,
+                }
+            return {"api": api, "found": True, **entry, "disclaimer": _data.RATE_LIMITS_DISCLAIMER}
+        return {"limits": _data.RATE_LIMITS, "disclaimer": _data.RATE_LIMITS_DISCLAIMER}

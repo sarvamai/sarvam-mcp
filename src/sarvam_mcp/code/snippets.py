@@ -163,7 +163,7 @@ def _recommend(task: str) -> dict[str, Any]:
             snippet_key=("stt", "python"),
             extras={
                 "mode": "transcribe",
-                "tip_long_audio": "For audio >30s, use /speech-to-text/job/init for the async batch flow.",
+                "tip_long_audio": "For audio >30s, use /speech-to-text/job/v1 for the async batch flow (create job → upload-files → start → poll status → download-files).",
             },
         )
 
@@ -183,7 +183,7 @@ def _recommend(task: str) -> dict[str, Any]:
             extras={
                 "default_speaker": "shubh",
                 "tip_speakers":    "Call sarvam_code_speakers('bulbul:v3') or sarvam_code_speakers('bulbul:v4-flash') for the voice list with tone hints.",
-                "v4_flash_example": {"model": "bulbul:v4-flash", "speaker": "simran_en_customer", "target_language_code": "en-IN"},
+                "v4_flash_example": {"model": "bulbul:v4-flash", "speaker": "simran_en_customer", "language_code": "en-IN"},
             },
         )
 
@@ -376,12 +376,16 @@ def _validate(endpoint: str, body: dict[str, Any]) -> list[dict[str, Any]]:
                 ))
         else:
             issues.append(_err("text", "Required: `text`, the string to synthesize (max 2500 characters)."))
-        if not body.get("target_language_code"):
-            issues.append(_err("target_language_code", "Required."))
-        elif body["target_language_code"] not in _TTS_LANG_CODES:
+        # The documented field is `language_code`; `target_language_code` is the older
+        # spelling still seen in existing code, so it is tolerated.
+        lang = body.get("language_code") or body.get("target_language_code")
+        lang_field = "language_code" if body.get("language_code") else "target_language_code"
+        if not lang:
+            issues.append(_err("language_code", "Required."))
+        elif lang not in _TTS_LANG_CODES:
             issues.append(_err(
-                "target_language_code",
-                f"'{body['target_language_code']}' not supported by TTS.",
+                lang_field,
+                f"'{lang}' not supported by TTS.",
                 "TTS covers 11 codes; call sarvam_code_languages('tts').",
             ))
         model = body.get("model", "bulbul:v3")

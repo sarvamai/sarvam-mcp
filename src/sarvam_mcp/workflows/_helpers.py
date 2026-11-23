@@ -98,7 +98,7 @@ async def tts_synthesize(
         "/text-to-speech",
         json_body={
             "text": text,
-            "target_language_code": target_language_code,
+            "language_code": target_language_code,
             "speaker": resolve_tts_speaker(model, speaker),
             "speech_sample_rate": speech_sample_rate,
             "model": model,

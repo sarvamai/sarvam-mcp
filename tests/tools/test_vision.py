@@ -133,10 +133,8 @@ async def test_classify_sends_file_and_json_request_part(mcp, pdf, httpx_mock):
     assert parts["request"]["filename"] is None  # plain form field, not a file upload
     assert json.loads(parts["request"]["body"]) == {
         "language": "hi-IN",
-        "config": {
-            "scope": "document", "categories": CATEGORIES,
-            "unmatched_behavior": "other", "max_pages": 2,
-        },
+        "max_pages": 2,
+        "config": {"categories": CATEGORIES, "unmatched_behavior": "other"},
     }
     assert out["job_id"] == JOB
     assert out["status"] == "completed"
@@ -151,22 +149,37 @@ async def test_classify_minimal_request_omits_unset_fields(mcp, pdf, httpx_mock)
     out = await call(mcp, "sarvam_tools_vision_classify", document_path=str(pdf))
 
     request = json.loads(multipart_parts(httpx_mock.get_requests()[0])["request"]["body"])
-    assert request == {"config": {"scope": "document"}}
+    assert request == {"config": {}}
     assert out["review_required"] is True
 
 
-async def test_classify_page_scope_and_details_flag(mcp, pdf, httpx_mock):
-    mock_job(httpx_mock, "/doc-ai/v1/job/classify", results={"result": {"pages": []}})
+async def test_classify_new_contract_options_and_details_flag(mcp, pdf, httpx_mock):
+    mock_job(httpx_mock, "/doc-ai/v1/job/classify", results={"result": {}})
 
-    await call(mcp, "sarvam_tools_vision_classify",
-               document_path=str(pdf), scope="page", include_details=True)
+    await call(mcp, "sarvam_tools_vision_classify", document_path=str(pdf),
+               instructions="Pick the document type", page_ranges="1-3,5",
+               min_class_confidence=0.8, context="Scanned bank papers",
+               include_evidence=True, include_details=True)
 
     requests = httpx_mock.get_requests()
     request = json.loads(multipart_parts(requests[0])["request"]["body"])
-    assert request["config"]["scope"] == "page"
+    assert request == {
+        "config": {"instructions": "Pick the document type", "page_ranges": "1-3,5",
+                   "review_policy": {"min_class_confidence": 0.8}},
+        "context": "Scanned bank papers",
+        "output": {"include_evidence": True},
+    }
+    assert "scope" not in request["config"]  # removed from the API contract
     results_req = requests[-1]
     assert results_req.url.path == f"/doc-ai/v1/job/{JOB}/results"
     assert results_req.url.params["include"] == "details"
+
+
+async def test_classify_rejects_max_pages_with_page_ranges(mcp, pdf, httpx_mock):
+    with pytest.raises(ToolError, match="not both"):
+        await call(mcp, "sarvam_tools_vision_classify", document_path=str(pdf),
+                   max_pages=3, page_ranges="1-2")
+    assert httpx_mock.get_requests() == []
 
 
 async def test_results_request_has_no_include_param_by_default(mcp, pdf, httpx_mock):
@@ -234,9 +247,9 @@ async def test_classify_requires_exactly_one_input(mcp):
         await call(mcp, "sarvam_tools_vision_classify")
 
 
-async def test_classify_rejects_bad_scope(mcp, pdf):
+async def test_classify_no_longer_accepts_scope(mcp, pdf):
     with pytest.raises(ToolError):
-        await call(mcp, "sarvam_tools_vision_classify", document_path=str(pdf), scope="paragraph")
+        await call(mcp, "sarvam_tools_vision_classify", document_path=str(pdf), scope="page")
 
 
 async def test_classify_api_400_surfaces_message(mcp, pdf, httpx_mock):
@@ -273,43 +286,27 @@ async def test_split_semantic_default(mcp, pdf, httpx_mock):
 
     parts = multipart_parts(httpx_mock.get_requests()[0])
     assert set(parts) == {"file", "request"}
-    assert json.loads(parts["request"]["body"]) == {
-        "config": {"method": "semantic", "classify_segments": False}
-    }
+    assert json.loads(parts["request"]["body"]) == {"config": {"classify_segments": False}}
     assert [s["document_ref"] for s in out["result"]["segments"]] == ["doc_1", "doc_2"]
     assert out["review_required"] is False
 
 
-async def test_split_fixed_pages(mcp, pdf, httpx_mock):
+async def test_split_new_contract_options(mcp, pdf, httpx_mock):
     mock_job(httpx_mock, "/doc-ai/v1/job/split", results={"result": {}})
 
-    await call(mcp, "sarvam_tools_vision_split",
-               document_path=str(pdf), method="fixed_pages", pages_per_segment=2)
+    await call(mcp, "sarvam_tools_vision_split", document_path=str(pdf),
+               instructions="One invoice per document", page_ranges="1-10",
+               must_keep_together=[{"start": 3, "end": 4}], must_split_before=[5],
+               min_segment_confidence=0.7, min_class_confidence=0.8)
 
     config = json.loads(multipart_parts(httpx_mock.get_requests()[0])["request"]["body"])["config"]
-    assert config == {"method": "fixed_pages", "classify_segments": False, "pages_per_segment": 2}
-
-
-async def test_split_page_ranges(mcp, pdf, httpx_mock):
-    mock_job(httpx_mock, "/doc-ai/v1/job/split", results={"result": {}})
-    ranges = [{"start": 1, "end": 2}, {"start": 3, "end": 4}]
-
-    await call(mcp, "sarvam_tools_vision_split",
-               document_path=str(pdf), method="page_ranges", segment_ranges=ranges)
-
-    config = json.loads(multipart_parts(httpx_mock.get_requests()[0])["request"]["body"])["config"]
-    assert config["method"] == "page_ranges" and config["segment_ranges"] == ranges
-
-
-async def test_split_triggers(mcp, pdf, httpx_mock):
-    mock_job(httpx_mock, "/doc-ai/v1/job/split", results={"result": {}})
-    split_on = [{"type": "text", "match": {"prefix": "INVOICE"}}]
-
-    await call(mcp, "sarvam_tools_vision_split",
-               document_path=str(pdf), method="triggers", split_on=split_on)
-
-    config = json.loads(multipart_parts(httpx_mock.get_requests()[0])["request"]["body"])["config"]
-    assert config["method"] == "triggers" and config["split_on"] == split_on
+    assert config == {
+        "classify_segments": False,
+        "instructions": "One invoice per document",
+        "page_ranges": "1-10",
+        "constraints": {"must_keep_together": [{"start": 3, "end": 4}], "must_split_before": [5]},
+        "review_policy": {"min_segment_confidence": 0.7, "min_class_confidence": 0.8},
+    }
 
 
 async def test_split_with_categories_turns_on_classify_segments(mcp, pdf, httpx_mock):
@@ -324,19 +321,18 @@ async def test_split_with_categories_turns_on_classify_segments(mcp, pdf, httpx_
     assert request["config"]["categories"] == CATEGORIES
 
 
-@pytest.mark.parametrize(
-    ("method", "needs"),
-    [("fixed_pages", "pages_per_segment"), ("page_ranges", "segment_ranges"),
-     ("triggers", "split_on")],
-)
-async def test_split_method_requires_its_argument(mcp, pdf, method, needs):
-    with pytest.raises(ToolError, match=needs):
-        await call(mcp, "sarvam_tools_vision_split", document_path=str(pdf), method=method)
-
-
-async def test_split_rejects_unknown_method(mcp, pdf):
+@pytest.mark.parametrize("removed", ["method", "pages_per_segment", "segment_ranges", "split_on"])
+async def test_split_removed_params_are_rejected(mcp, pdf, removed):
+    # Removed from the API contract 2026-11 (the model always finds the boundaries).
     with pytest.raises(ToolError):
-        await call(mcp, "sarvam_tools_vision_split", document_path=str(pdf), method="magic")
+        await call(mcp, "sarvam_tools_vision_split", document_path=str(pdf), **{removed: "x"})
+
+
+async def test_split_categories_require_classify_segments(mcp, pdf, httpx_mock):
+    with pytest.raises(ToolError, match="classify_segments"):
+        await call(mcp, "sarvam_tools_vision_split", document_path=str(pdf),
+                   categories=CATEGORIES, classify_segments=False)
+    assert httpx_mock.get_requests() == []
 
 
 async def test_split_include_details(mcp, pdf, httpx_mock):

@@ -155,14 +155,29 @@ def _gather_files(paths: list[str], max_files: int) -> list[Path]:
             if _supported(p):
                 out.append(p)
         elif p.is_dir():
-            for sub in sorted(p.rglob("*")):
-                if sub.is_file() and _supported(sub):
+            # Lazy, sorted-per-directory walk: stops as soon as max_files is
+            # reached instead of walking + sorting the whole tree first (#70).
+            for sub in _walk_sorted(p):
+                if _supported(sub):
                     out.append(sub)
                 if len(out) >= max_files:
                     break
         if len(out) >= max_files:
             break
     return out[:max_files]
+
+
+def _walk_sorted(root: Path):
+    """Yield files under ``root`` depth-first, sorted within each directory."""
+    try:
+        entries = sorted(root.iterdir())
+    except OSError:
+        return
+    for entry in entries:
+        if entry.is_dir() and not entry.is_symlink():
+            yield from _walk_sorted(entry)
+        elif entry.is_file():
+            yield entry
 
 
 def _supported(p: Path) -> bool:
