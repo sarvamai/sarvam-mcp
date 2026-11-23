@@ -24,7 +24,10 @@ from sarvam_mcp.tools._uploads import presigned_put_headers
 from sarvam_mcp.tools.vision import _guess_doc_mime
 
 DUBBING_BASE = "/dubbing/jobs"
-ExportOption = Literal["video", "audio", "mp3", "srt"]
+# Documented values (docs.sarvam.ai /dubbing/jobs): video (dubbed MP4), audio (dubbed voice over the
+# background, .wav), audio_vocals (dubbed voice alone, .wav), srt, vtt. `mp3` is NOT in the API docs;
+# it is kept only so existing callers keep working.
+ExportOption = Literal["video", "audio", "audio_vocals", "srt", "vtt", "mp3"]
 PacePreset = Literal["slow", "moderate", "normal", "fast"]
 Register = Literal[
     "formal",
@@ -68,7 +71,10 @@ def register(mcp: FastMCP) -> None:
         target_langs: list[str] = Field(description="One or more target BCP-47 codes."),
         export_options: list[ExportOption] | None = Field(
             default=None,
-            description="Formats to export: video, audio, mp3, srt.",
+            description=(
+                "Formats to auto-export per language: video, audio, audio_vocals, srt, vtt. "
+                "Omit to get only the dubbed MP4. (`mp3` is accepted but undocumented.)"
+            ),
         ),
         voice_cloning: bool = Field(default=True),
         voice_id: str | None = Field(
@@ -80,9 +86,18 @@ def register(mcp: FastMCP) -> None:
         register: Register = Field(default="auto"),
         job_name: str | None = Field(default=None),
         disable_watermark: bool = Field(default=False),
+        editor_flow: bool = Field(
+            default=False,
+            description=(
+                "True suppresses auto-export so you can edit in the dubbing editor; "
+                "billed at the editor rate (2x the default per-minute rate, e.g. ₹80 vs ₹40/min on PAYG)."
+            ),
+        ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
         path = Path(media_path).expanduser()
+        src_lang = "or-IN" if src_lang == "od-IN" else src_lang  # dubbing spells Odia or-IN
+        target_langs = ["or-IN" if c == "od-IN" else c for c in target_langs]
         if not path.is_file():
             raise FileNotFoundError(f"Media file not found: {path}")
         if not target_langs:
@@ -96,7 +111,7 @@ def register(mcp: FastMCP) -> None:
             "num_speakers": num_speakers,
             "register": register,
             "disable_watermark": disable_watermark,
-            "editor_flow": False,
+            "editor_flow": editor_flow,
             "job_name": job_name or path.name,
         }
         if export_options:
@@ -139,7 +154,7 @@ def register(mcp: FastMCP) -> None:
             "Runtime tool — calls Sarvam API now.\n\n"
             "Poll a dubbing job. live-status reports pipeline progress. "
             "export-status returns signed download URLs per language and format "
-            "(video, audio, mp3, srt). URLs last about 24 hours."
+            "(video, audio, audio_vocals, srt, vtt). URLs last about 24 hours."
         ),
     )
     async def sarvam_dubbing_status(

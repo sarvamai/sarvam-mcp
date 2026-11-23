@@ -7,6 +7,7 @@ so tool modules can stay short and focused on their endpoint shape.
 from __future__ import annotations
 
 import base64
+import binascii
 import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -55,33 +56,43 @@ async def resolve_file_input(
     if filename:
         suffix = Path(filename).suffix or ""
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)  # noqa: SIM115 — closed in finally
     tmp_path = Path(tmp.name)
     try:
-        if file_base64 is not None:
-            data = base64.b64decode(file_base64)
-            if len(data) > max_bytes:
-                raise ValueError(
-                    f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
-                )
-            tmp.write(data)
-            tmp.close()
-            yield tmp_path
-        else:
-            assert file_url is not None
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-                async with client.stream("GET", file_url) as resp:
+        try:
+            if file_base64 is not None:
+                try:
+                    # validate=True rejects characters outside the base64
+                    # alphabet instead of silently dropping them (#80).
+                    data = base64.b64decode(file_base64, validate=True)
+                except (binascii.Error, ValueError) as exc:
+                    raise ValueError(f"file_base64 is not valid base64: {exc}") from exc
+                if not data:
+                    raise ValueError("file_base64 decoded to an empty file.")
+                if len(data) > max_bytes:
+                    raise ValueError(
+                        f"Decoded file is {len(data)} bytes, exceeds {max_bytes} byte limit."
+                    )
+                tmp.write(data)
+            else:
+                assert file_url is not None
+                async with (
+                    httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client,
+                    client.stream("GET", file_url) as resp,
+                ):
                     resp.raise_for_status()
                     downloaded = 0
                     async for chunk in resp.aiter_bytes(chunk_size=65536):
                         downloaded += len(chunk)
                         if downloaded > max_bytes:
-                            raise ValueError(
-                                f"Downloaded file exceeds {max_bytes} byte limit."
-                            )
+                            raise ValueError(f"Downloaded file exceeds {max_bytes} byte limit.")
                         tmp.write(chunk)
+        finally:
+            # Always release the handle before unlink: an open handle makes
+            # unlink raise PermissionError on Windows and leaks the fd
+            # elsewhere (#59, #16, PRs #20/#73).
             tmp.close()
-            yield tmp_path
+        yield tmp_path
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -166,6 +177,24 @@ def resolve_tts_speaker(model: str, speaker: str | None) -> str:
 # reasoning/agentic/coding) and sarvam-105b-conversations (32K ctx, post-trained
 # for real-time dialogue and voice-agent workloads — same price, same schema).
 SarvamLLM = Literal["sarvam-105b", "sarvam-105b-conversations"]
+
+# Chat Completion V2 (`/v2/chat/completions`, GA since 2026-10-20) serves the
+# Sarvam models plus open-weight "Token Factory" models. Provisioned-throughput
+# models (deepseekv4-pro, kimi-k3.1-pro, qwen38-27b) only work for orgs Sarvam
+# has enabled: deepseekv4-pro returns 400, the others 404, without access.
+# Source: docs.sarvam.ai/api-reference/chat/chat-completions-v2 (case-sensitive IDs).
+ChatModel = Literal[
+    "sarvam-105b",
+    "sarvam-105b-conversations",
+    "glm5.3",
+    "glm5.3-flash",
+    "gemma4",
+    "deepseekv4.1-flash-1017",
+    "deepseekv4.1-flash-1017-interactive",
+    "deepseekv4-pro",
+    "kimi-k3.1-pro",
+    "qwen38-27b",
+]
 
 
 # ---- Translate-mode + script enums ---------------------------------------

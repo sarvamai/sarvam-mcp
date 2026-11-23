@@ -32,6 +32,14 @@ class SarvamRateLimitError(SarvamAPIError):
         self.retry_after = retry_after
 
 
+class SarvamQuotaError(SarvamAPIError):
+    """402 ``insufficient_quota_error`` — credits exhausted.
+
+    Distinct from 429 (rate limit): retrying will not help until credits are
+    topped up or the plan is upgraded.
+    """
+
+
 class SarvamBadRequestError(SarvamAPIError):
     """400 — caller-side validation problem."""
 

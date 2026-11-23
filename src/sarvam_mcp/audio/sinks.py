@@ -37,7 +37,11 @@ class FileSink:
 
     async def store(self, data: bytes, *, filename: str, mime_type: str) -> StoredAudio:
         self._base_path.mkdir(parents=True, exist_ok=True)
-        path = self._base_path / filename
+        base = self._base_path.resolve()
+        path = (base / filename).resolve()
+        # Refuse ../ segments and absolute filenames that would escape base_path (#74).
+        if not path.is_relative_to(base):
+            raise ValueError(f"Refusing to write outside {base}: {filename!r}")
         path.write_bytes(data)
         return StoredAudio(
             file_path=str(path),

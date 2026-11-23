@@ -55,9 +55,21 @@ def register(mcp: FastMCP) -> None:
         ),
         genre: Genre | None = Field(default=None),
         job_name: str | None = Field(default=None),
-        use_native_numerals: bool = Field(default=False),
+        use_native_numerals: bool | None = Field(
+            default=None,
+            description=(
+                "None (default) = API default; False = 0-9 digits; True = native-script numerals."
+            ),
+        ),
         style_guidelines: str | None = Field(
             default=None, description="Tone or terminology notes, up to about 4000 characters."
+        ),
+        language_specific_guidelines: dict[str, str] | None = Field(
+            default=None,
+            description=(
+                "Per-target-language notes (up to ~4000 chars each). Keys must be among "
+                "target_language_codes, e.g. {'hi-IN': 'Use formal register'}."
+            ),
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
@@ -67,12 +79,24 @@ def register(mcp: FastMCP) -> None:
         if not 1 <= len(target_language_codes) <= 12:
             raise ValueError("target_language_codes must contain 1 to 12 languages.")
 
+        # This endpoint's enum spells Odia `or-IN` (the rest of the API uses `od-IN`).
+        source_language_code = _doc_lang(source_language_code)
+        target_language_codes = [_doc_lang(c) for c in target_language_codes]
+        if language_specific_guidelines:
+            stray = set(language_specific_guidelines) - set(target_language_codes)
+            if stray:
+                raise ValueError(
+                    f"language_specific_guidelines keys {sorted(stray)} are not in target_language_codes."
+                )
         body: dict[str, Any] = {
             "source_language_code": source_language_code,
             "target_language_codes": target_language_codes,
             "original_filename": path.name,
-            "use_native_numerals": use_native_numerals,
         }
+        if use_native_numerals is not None:
+            body["use_native_numerals"] = use_native_numerals
+        if language_specific_guidelines:
+            body["language_specific_guidelines"] = language_specific_guidelines
         if genre:
             body["genre"] = genre
         if job_name:
@@ -174,3 +198,8 @@ def register(mcp: FastMCP) -> None:
             "raw": status,
             "observability": metrics.to_response_block(),
         }
+
+
+def _doc_lang(code: str) -> str:
+    """Document translation and dubbing spell Odia ``or-IN``; other APIs use ``od-IN``."""
+    return "or-IN" if code == "od-IN" else code

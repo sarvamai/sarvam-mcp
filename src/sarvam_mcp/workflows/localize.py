@@ -99,7 +99,10 @@ def register(mcp: FastMCP) -> None:
                         model=model,
                         metrics=metrics,
                     )
-                    _set_path(data, path_parts, translated)
+                    if not path_parts:
+                        data = translated  # top-level JSON string (#125)
+                    else:
+                        _set_path(data, path_parts, translated)
                     if (i + 1) % 25 == 0:
                         await ctx.report_progress(i + 1, len(strings))
 
@@ -175,6 +178,8 @@ def _collect_strings(
 
 
 def _set_path(root: Any, path: list[str | int], value: str) -> None:
+    if not path:  # root document is itself a string (#125)
+        raise ValueError("_set_path called with an empty path; handle root strings in the caller")
     cursor = root
     for key in path[:-1]:
         cursor = cursor[key]

@@ -83,6 +83,8 @@ def register(mcp: FastMCP) -> None:
 def _save_key(api_key: str) -> None:
     """Save API key to ~/.sarvam/credentials, preserving other settings."""
     CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if sys.platform != "win32":
+        os.chmod(CREDENTIALS_PATH.parent, 0o700)
 
     preserved: list[str] = []
     if CREDENTIALS_PATH.exists():
@@ -102,8 +104,16 @@ def _save_key(api_key: str) -> None:
         body += f"{line}\n"
 
     tmp = CREDENTIALS_PATH.with_suffix(".tmp")
-    tmp.write_text(body)
-    _restrict_permissions(tmp)
+    if sys.platform == "win32":
+        tmp.write_text(body)
+        _restrict_permissions(tmp)
+    else:
+        # Create the file 0o600 from the start so the key is never readable
+        # by other users, even briefly (#86).
+        tmp.unlink(missing_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(body)
     tmp.replace(CREDENTIALS_PATH)
 
 

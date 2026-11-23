@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp import Context, FastMCP
 from pydantic import Field
@@ -11,6 +11,10 @@ from sarvam_mcp.observability import measure_tool
 from sarvam_mcp.tools._common import LanguageCode, NumeralsFormat, ready_ctx
 
 TRANSLITERATE_PATH = "/transliterate"
+# /transliterate covers only these 11 languages (no Urdu, Assamese, Sanskrit, etc.).
+_TRANSLITERATE_LANGS = frozenset({
+    "bn-IN", "en-IN", "gu-IN", "hi-IN", "kn-IN", "ml-IN", "mr-IN", "od-IN", "pa-IN", "ta-IN", "te-IN",
+})
 
 
 def register(mcp: FastMCP) -> None:
@@ -38,12 +42,25 @@ def register(mcp: FastMCP) -> None:
             default=False,
             description="Expand numbers/abbreviations into spoken form.",
         ),
-        spoken_form_numerals_language: LanguageCode | None = Field(
+        spoken_form_numerals_language: Literal["english", "native"] | None = Field(
             default=None,
-            description="Language to use when speaking out numbers (only with spoken_form=True).",
+            description=(
+                "How numbers are spoken: 'english' or 'native' (API default 'native'). "
+                "Only has an effect with spoken_form=True."
+            ),
         ),
     ) -> dict[str, Any]:
         sc = await ready_ctx(ctx)
+        bad = {
+            c for c in (source_language_code, target_language_code)
+            if c not in _TRANSLITERATE_LANGS and c not in ("auto", "unknown")
+        }
+        if target_language_code in ("auto", "unknown"):
+            raise ValueError("target_language_code cannot be auto-detected.")
+        if bad:
+            raise ValueError(
+                f"Transliteration does not support {sorted(bad)}. Supported: {sorted(_TRANSLITERATE_LANGS)}."
+            )
         # Upstream /transliterate accepts "auto", not "unknown".
         src = "auto" if source_language_code == "unknown" else source_language_code
         body: dict[str, Any] = {
