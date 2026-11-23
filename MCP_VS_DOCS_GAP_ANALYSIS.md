@@ -1,4 +1,4 @@
-# sarvam-mcp v0.2.14 vs docs.sarvam.ai — Gap Analysis
+# sarvam-mcp v0.2.14 → 0.3.0 vs docs.sarvam.ai — Gap Analysis
 
 **Date:** 2026-11-23 · **Compared:** this repo (`main`, 91287d1) against docs.sarvam.ai (llms.txt index, API reference pages, pricing, models, changelog through 2026-11-22).
 
