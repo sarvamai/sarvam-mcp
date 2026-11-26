@@ -481,20 +481,23 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "model": "sarvam-vision",
         "content_type": "multipart/form-data",
         "request_body": {
-            "file":          "binary, required (or upload_ids)",
-            "language":      "str — BCP-47, default en-IN. Not language_code.",
-            "output_format": "str — html (API default) | md | json. Not 'markdown'.",
-            "content_type":  "str — printed | handwritten | mixed",
-            "model":         "str — sarvam-vision-v1",
+            "file":          "binary — or upload_ids (comma-separated ids from POST /doc-ai/v1/job/upload); exactly one",
+            "language":      "str — BCP-47, e.g. en-IN, hi-IN. Default `indic` (Indic OCR); send en-IN for English. Not language_code.",
+            "output_format": "str — html (default) | md | json. Not 'markdown' (400).",
+            "content_type":  "str — printed (default) | handwritten | mixed",
+            "model":         "str — sarvam-vision-v1 (default; other values 400 MODEL_INVALID)",
         },
         "response": {
             "job_id": "str",
-            "status": "str — pending, then completed | partially_completed | failed | rejected",
+            "status": "str — pending, running, then completed | partially_completed | failed | rejected",
         },
         "notes": (
-            "Full-document parse (OCR). Poll GET /doc-ai/v1/job/{job_id}/status, then "
-            "GET /doc-ai/v1/job/{job_id}/download-url. "
-            "Limit: 20 pages per request (PDF, or ZIP of JPG/PNG pages). GET /doc-ai/v1/capabilities returns the live limits."
+            "Full-document parse (OCR). Poll GET /doc-ai/v1/job/{job_id}/status (the `pipeline` field "
+            "uses the API's internal name for Parse, not 'parse'). Then GET /doc-ai/v1/job/{job_id}/results for JSON text blocks per page "
+            "(text, layout_tag, reading_order, coordinates; works for every output_format), or "
+            "GET /doc-ai/v1/job/{job_id}/download-url for a ZIP with the output file and manifest. "
+            "Limits: 20 pages per request, 100 MiB per file. Formats: PDF, PNG, JPEG, TIFF, DOCX, or a flat "
+            "ZIP of JPG/PNG pages. GET /doc-ai/v1/capabilities returns the live limits."
         ),
     },
     "/doc-ai/v1/job/extract": {
@@ -502,19 +505,21 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "model": "sarvam-vision",
         "content_type": "multipart/form-data",
         "request_body": {
-            "file":          "binary, required (or upload_ids)",
-            "schema":        "JSON string — root type object, each field needs type and description",
-            "config_id":     "str — alternative to schema",
-            "language":      "str — BCP-47",
-            "output_format": "str — json | csv | xlsx",
+            "file":          "binary — or upload_ids; exactly one. Several files in one request are read as ONE document (one merged result)",
+            "schema":        "JSON string — root type object with non-empty properties; every field needs a type, a description is recommended; optional enum; max depth 4",
+            "config_id":     "str — saved config (UUID) instead of schema; exactly one of schema / config_id (400 otherwise)",
+            "language":      "str — BCP-47. Default `indic` (Indic OCR); send en-IN for English",
+            "output_format": "str — json (default) | csv | xlsx",
             "mode":          "str — basic (default) | advanced (second whole-document pass; slower, ₹2.50 vs ₹1.00 per page)",
-            "classification": "'true' | 'false' (text) — also classify the document",
-            "model":         "str — sarvam-vision-v1",
+            "model":         "str — sarvam-vision-v1 (default)",
         },
-        "response": {"job_id": "str", "status": "str"},
+        "response": {"job_id": "str", "status": "str — pending, running, then a terminal state"},
         "notes": (
-            "Schema extraction. Exactly one of schema / config_id. Poll status, then "
-            "GET /doc-ai/v1/job/{job_id}/results. Limit: 500 pages per request (PDF, or ZIP of JPG/PNG pages)."
+            "Schema extraction. Poll status, then GET /doc-ai/v1/job/{job_id}/results: `result` (field "
+            "values) and `annotations` (per field: confidence and sources with page and bbox). /results "
+            "is JSON for every output_format; for the CSV/XLSX file call GET /doc-ai/v1/job/{job_id}/download-url. "
+            "Do not send `classification`: it returns 400 CLASSIFICATION_NOT_SUPPORTED — use /classify. "
+            "Limits: 500 pages per request, 100 MiB per file. Formats: PDF, PNG, JPEG, TIFF, DOCX, or a flat ZIP of JPG/PNG pages."
         ),
     },
     "/doc-ai/v1/job/classify": {
@@ -522,32 +527,28 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "model": "sarvam-vision",
         "content_type": "multipart/form-data",
         "request_body": {
-            "file":        "binary, required (or upload_ids). PDF, PNG, JPEG or TIFF; repeat for up to 10 documents",
-            "request":     "JSON part (application/json) — see below",
-            "request.config.categories": "list of {type (required), description, identifier_key, positive_examples[<=8], negative_examples[<=8]}, up to 200. Omit to let the API read types from instructions or suggest one",
+            "file":        "binary (or upload_ids). PDF, PNG, JPEG, TIFF or DOCX; repeat for up to 10 documents",
+            "request":     "JSON part (application/json). Must contain `config` ({} for defaults); request={} returns 400",
+            "request.config.categories": "list of {type (required, <=200 chars), description (optional, <=2,000 chars)}, up to 20. Omit to let the API read types from instructions or suggest one",
             "request.config.instructions": "str, up to 8,000 chars",
             "request.config.page_ranges": "str '1-3,5' or list of {start,end}. Mutually exclusive with request.max_pages (422 PAGE_SELECTION_CONFLICT)",
             "request.config.unmatched_behavior": "str — suggest_type (default) | other",
-            "request.config.label_mode":  "'single' (the only value)",
             "request.config.review_policy.min_class_confidence": "0-1, default 0.9",
-            "request.max_pages":          "int 1-1000 — read the first N pages",
+            "request.max_pages":          "int >= 1 — read the first N pages. Default: first 2 pages and the last",
             "request.language":           "str — BCP-47, e.g. en-IN",
             "request.context":            "str, up to 4,000 chars",
-            "request.reasoning_input":    "auto (default) | text_only | images_for_scans | vision (image modes only where /doc-ai/v1/capabilities lists them)",
-            "request.config_id | request.processor": "saved config / published processor instead of an inline config (exactly one of config, config_id, processor)",
             "request.output.include_evidence": "bool, default false",
-            "request.metadata / webhook_url / webhook_secret / webhook_id": "echoed back with the result / webhook delivery",
         },
         "response": {"job_id": "str", "status": "str — accepted", "status_url": "str", "results_url": "str"},
         "notes": (
-            "ONE decision per document — there is no `scope` (removed 2026-11; use Split with categories "
-            "for a result per document). Poll "
-            "GET /doc-ai/v1/job/{job_id}/status until completed, then GET "
-            "/doc-ai/v1/job/{job_id}/results (add ?include=details for evidence). "
-            "Check review_required; confidence can be null. A bundle of several "
-            "documents returns classification_status 'mixed' — split it first. "
-            "Limits: 20 pages per request, 10 documents per request, up to 200 categories, "
-            "512 MB per document."
+            "ONE decision per document — there is no `scope` (use Split with categories for a result "
+            "per document). Poll GET /doc-ai/v1/job/{job_id}/status (accepted, running, then completed | "
+            "partially_completed | failed | cancelled), then GET /doc-ai/v1/job/{job_id}/results (add "
+            "?include=details for evidence). Check review_required; confidence can be null. A bundle of "
+            "several documents returns classification_status 'mixed' — split it first. "
+            "Limits: 20 pages per request, 20 categories, 512 MiB per file (send files over ~100 MiB "
+            "with upload_ids; 422 INPUT_TOO_LARGE above 512 MiB). Add an Idempotency-Key header to retry "
+            "a submission safely."
         ),
     },
     "/doc-ai/v1/job/split": {
@@ -555,27 +556,46 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "model": "sarvam-vision",
         "content_type": "multipart/form-data",
         "request_body": {
-            "file":    "binary, required (or upload_ids). PDF, PNG, JPEG or TIFF",
-            "request": "JSON part (application/json) — see below",
+            "file":    "binary (or upload_ids). PDF, PNG, JPEG, TIFF or DOCX (no ZIP); repeat for up to 10 documents",
+            "request": "JSON part (application/json). Must contain `config` ({} for defaults)",
             "request.config.classify_segments": "bool, default true. Send categories when true, omit them when false",
-            "request.config.categories":        "list of {type (required), description, identifier_key, positive_examples, negative_examples}, up to 200",
+            "request.config.categories":        "list of {type (required), description, identifier_key (fills each document's identifier)}, up to 20",
             "request.config.instructions":      "str, up to 8,000 chars",
             "request.config.page_ranges":       "str '1-3,5' or list of {start,end}. Default: every page",
-            "request.config.constraints.must_keep_together": "list of {start,end} page runs kept in one document",
-            "request.config.constraints.must_split_before":  "list of pages that always start a new document",
+            "request.config.constraints.must_split_before":  "list of pages (2 or later) that always start a new document; page 1 returns 400",
             "request.config.review_policy.min_segment_confidence / min_class_confidence": "0-1, default 0.9",
-            "request.context / language / read_ref / config_id / processor / metadata / webhook_*": "as classify (reasoning_input: auto | text_only only)",
+            "request.context / language": "as classify",
         },
         "response": {"job_id": "str", "status": "str — accepted", "status_url": "str", "results_url": "str"},
         "notes": (
             "The model always finds the boundaries — there is NO `method`, `pages_per_segment`, "
-            "`segment_ranges`, `split_on`, `remainder`, `quality`, `output`, `budget` or `execution` "
-            "(removed 2026-11; sending them is rejected). Splits a bundle into child documents, each with original page numbers and a "
-            "document_ref. Poll status, then GET /doc-ai/v1/job/{job_id}/results. "
-            "'completed' does not mean every segment passed review — check each "
-            "segment's review_required. "
-            "Limits: 500 pages, 10 documents per request, up to 200 categories, "
-            "512 MB per document."
+            "`segment_ranges`, `split_on` or `remainder` (sending them is rejected). "
+            "`constraints.must_keep_together` returns 422 UNSUPPORTED_CAPABILITY unless "
+            "GET /doc-ai/v1/capabilities lists it as enabled. Splits a bundle into child documents, each with "
+            "original page numbers and a document_ref. Poll status, then GET /doc-ai/v1/job/{job_id}/results. "
+            "'completed' does not mean every segment passed review — check each segment's review_required. "
+            "Limits: 500 pages per request, 20 categories, 512 MiB per file (over ~100 MiB use upload_ids)."
+        ),
+    },
+    "/doc-ai/v1/job/upload": {
+        "method": "POST",
+        "content_type": "application/json",
+        "request_body": {
+            "content_type": "str, optional — e.g. application/pdf",
+        },
+        "response": {
+            "upload_id": "str",
+            "method": "str — usually PUT",
+            "url": "str — presigned URL",
+            "headers": "dict, optional — send with the upload",
+            "expires_at": "str — about an hour after creation",
+        },
+        "notes": (
+            "Upload a file first, then pass `upload_ids` instead of `file` on Parse, Extract, Split or "
+            "Classify (comma-separated for several). Needed for Split/Classify files over ~100 MiB (up to "
+            "512 MiB). Each upload_id works once (reuse: 404 UPLOAD_NOT_FOUND); using it before the PUT "
+            "finishes returns 400 UPLOAD_NOT_COMPLETED. Up to 300 uploaded files can wait unused "
+            "(429 UPLOAD_LIMIT_EXCEEDED, Retry-After)."
         ),
     },
     "/translate/document/jobs": {
@@ -902,7 +922,7 @@ PRICING: dict[str, dict[str, Any]] = {
     "language-identification": {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(0.35, 0.35, 0.31), "tier": "/text-lid"},
     # Document AI
     "sarvam-vision":        {"unit": "per page", "rates_inr_by_plan": _per_plan(0.50, 0.50, 0.50),
-                             "tier": "Document digitization / parse"},
+                             "tier": "Document AI: Parse"},
     "doc-extract-basic":    {"unit": "per page", "rates_inr_by_plan": _per_plan(1.00, 1.00, 1.00), "tier": "extract mode=basic"},
     "doc-extract-advanced": {"unit": "per page", "rates_inr_by_plan": _per_plan(2.50, 2.50, 2.50), "tier": "extract mode=advanced"},
     "document-translation": {"unit": "per 1,000 billable characters, per target language",
@@ -966,6 +986,21 @@ def _limit(payg: int, pro: int, growth: int, unit: str = "req/min", **extra: Any
     return {"unit": unit, "payg": payg, "pro": pro, "growth": growth, **extra}
 
 
+# Document AI limits are per organisation and shared by Parse, Extract, Split and
+# Classify — not per plan or per operation (docs: languages-formats-limits#rate-limits).
+_DOC_AI_SHARED: dict[str, Any] = {
+    "unit": "req/min",
+    "all_plans": {
+        "submit_and_upload": 300,
+        "status_results_download": 6000,
+        "uploaded_files_waiting": 300,
+    },
+    "note": (
+        "Organisation-wide and shared by Parse, Extract, Split and Classify. Over a limit returns 429 "
+        "(retryable: true, Retry-After). Contracted limits apply instead; contact Sarvam for more."
+    ),
+}
+
 RATE_LIMITS: dict[str, dict[str, Any]] = {
     "stt_rest":            _limit(60, 100, 4000),
     "stt_websocket":       _limit(20, 100, 100, "concurrent"),
@@ -981,10 +1016,11 @@ RATE_LIMITS: dict[str, dict[str, Any]] = {
     "llm_default":         _limit(50, 200, 1000, note="gemma4, glm5.3, deepseekv4.1-flash-1017"),
     "llm_sarvam_105b":     _limit(60, 200, 300, note="sarvam-105b and sarvam-105b-conversations"),
     "dubbing":             _limit(5, 50, 300),
-    "doc_ai_parse":        _limit(200, 300, 400, pages_per_request=20),
-    "doc_ai_extract":      _limit(30, 50, 60, pages_per_request=500),
-    "doc_ai_split":        _limit(60, 120, 180, pages_per_request=500),
-    "doc_ai_classify":     _limit(100, 150, 200, pages_per_request=20),
+    "doc_ai": _DOC_AI_SHARED,
+    "doc_ai_parse":        {**_DOC_AI_SHARED, "pages_per_request": 20, "max_file_mib": 100},
+    "doc_ai_extract":      {**_DOC_AI_SHARED, "pages_per_request": 500, "max_file_mib": 100},
+    "doc_ai_split":        {**_DOC_AI_SHARED, "pages_per_request": 500, "max_file_mib": 512},
+    "doc_ai_classify":     {**_DOC_AI_SHARED, "pages_per_request": 20, "max_file_mib": 512},
     "document_translation": _limit(200, 500, 1000, pages_per_request=500, note="Document Translation job endpoints. Poll live-status every 10-15 s."),
 }
 

@@ -268,10 +268,10 @@ def _recommend(task: str) -> dict[str, Any]:
         return _result(
             model="sarvam-vision",
             endpoint="/doc-ai/v1/job/classify",
-            why="Document AI classify — label a document, or each page, against categories you define.",
+            why="Document AI classify — label a document against categories you define (one decision per document).",
             language_code=detected_lang,
             snippet_key=None,
-            extras={"note": "Send file plus a JSON `request` with config.categories. Poll /doc-ai/v1/job/{job_id}/status, then /results. Check review_required."},
+            extras={"note": "Send file plus a JSON `request` with `config` (up to 20 categories; {} for defaults). Poll /doc-ai/v1/job/{job_id}/status until completed, then /results. Check review_required."},
         )
     if re.search(r"\b(split|separate|segment)\b", t) and re.search(r"\b(document|documents|pdf|pages|bundle|scan)\b", t):
         return _result(
@@ -280,7 +280,7 @@ def _recommend(task: str) -> dict[str, Any]:
             why="Document AI split — divide a bundle of pages into separate child documents.",
             language_code=detected_lang,
             snippet_key=None,
-            extras={"note": "Methods: semantic, fixed_pages, page_ranges, triggers. Poll /doc-ai/v1/job/{job_id}/status, then /results."},
+            extras={"note": "The model finds the boundaries (no `method`). Send file plus a JSON `request` with `config`; add categories to label each document. Poll /doc-ai/v1/job/{job_id}/status, then /results."},
         )
 
     # ---- vision / OCR / document
@@ -291,7 +291,7 @@ def _recommend(task: str) -> dict[str, Any]:
             why="Document AI parse — full-document OCR to markdown, HTML, or JSON. Schema fields use /doc-ai/v1/job/extract.",
             language_code=detected_lang,
             snippet_key=None,
-            extras={"note": "Poll /doc-ai/v1/job/{job_id}/status. Up to 30 pages per PDF, 200 MB. Pass output_format md, not markdown."},
+            extras={"note": "Poll /doc-ai/v1/job/{job_id}/status, then /results (text blocks) or /download-url (ZIP). Up to 20 pages and 100 MiB per request. Pass `language` (en-IN for English) and output_format md, not markdown."},
         )
 
     # ---- language detection
