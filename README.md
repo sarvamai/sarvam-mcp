@@ -99,10 +99,11 @@ All defaults below reflect the latest non-deprecated models.
 | `sarvam_dictate_job_submit` / `_job_status` | Dictate recordings up to 1 hour (async) | `dictate-v1` |
 | `sarvam_cloned_voice_create` / `_speak` / `_list` / `_get` / `_delete` | Instant Voice Cloning (beta) | — |
 | `sarvam_cloned_voice_watermark_detect` | Check audio for Sarvam's watermark (free) | — |
-| `sarvam_vision_parse` | Document OCR to markdown, HTML, or JSON | Sarvam Vision |
-| `sarvam_vision_extract` | Schema extraction from a document | Sarvam Vision |
-| `sarvam_vision_classify` | Label a document, or each page, against your categories | Sarvam Vision |
-| `sarvam_vision_split` | Split a bundle of pages into separate documents | Sarvam Vision |
+| `sarvam_vision_parse` | Document AI Parse: OCR to Markdown, HTML, or JSON, with each page's text | Sarvam Vision |
+| `sarvam_vision_extract` | Document AI Extract: schema fields with per-field confidence and sources | Sarvam Vision |
+| `sarvam_vision_classify` | Document AI Classify: label a document against up to 20 categories | Sarvam Vision |
+| `sarvam_vision_split` | Document AI Split: separate a bundle of pages into its documents | Sarvam Vision |
+| `sarvam_vision_capabilities` | Live Document AI limits, formats and features for your account | — |
 | `sarvam_vision_job_status` | Poll a Document AI job | — |
 | `sarvam_prism_decide` | Calibrated yes/no, pick-one and ordered-scale decisions | `sarvam-prism` |
 | `sarvam_dubbing_submit` | Official video/audio dubbing job | — |

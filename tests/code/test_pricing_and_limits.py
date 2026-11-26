@@ -29,6 +29,10 @@ def test_rate_limits_match_docs():
     assert (r["stt_rest"]["payg"], r["stt_rest"]["growth"]) == (60, 4000)
     assert r["llm_sarvam_105b"]["growth"] == 300
     assert r["doc_ai_extract"]["pages_per_request"] == 500
+    assert r["doc_ai"]["all_plans"] == {
+        "submit_and_upload": 300, "status_results_download": 6000, "uploaded_files_waiting": 300,
+    }
+    assert r["doc_ai_classify"]["all_plans"] == r["doc_ai"]["all_plans"]  # shared, not per operation
     assert r["voice_watermark_detect"]["all_plans"] == 5
 
 

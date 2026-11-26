@@ -49,6 +49,7 @@ EndpointPath = Literal[
     "/doc-ai/v1/job/extract",
     "/doc-ai/v1/job/classify",
     "/doc-ai/v1/job/split",
+    "/doc-ai/v1/job/upload",
     "/translate/document/jobs",
     "/dubbing/jobs",
     "/text-to-speech/pronunciation-dictionary",
@@ -201,7 +202,7 @@ def register(mcp: FastMCP) -> None:
             "Build-time tool — helps write code that uses Sarvam. For runtime actions, use sarvam_tools_* instead.\n\n"
             "Published per-plan rate limits (Pay-as-you-go / Pro / Growth) for a Sarvam API, or all if omitted — "
             "STT, TTS, Dictate, voice cloning, translate, LLMs, dubbing, Document AI. Keys: stt_rest, stt_batch, "
-            "tts_websocket, dictate_clip, llm_sarvam_105b, doc_ai_extract, … Use these to size retry/backoff and "
+            "tts_websocket, dictate_clip, llm_sarvam_105b, doc_ai (shared by all Document AI operations), … Use these to size retry/backoff and "
             "concurrency. 429 = rate limited, 503 = load shedding, 402 = credits exhausted."
         ),
     )

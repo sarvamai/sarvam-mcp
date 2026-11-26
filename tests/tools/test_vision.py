@@ -202,7 +202,7 @@ async def test_classify_polls_until_terminal(mcp, pdf, httpx_mock):
     assert out["result"] == {"type": "invoice"}
 
 
-@pytest.mark.parametrize("terminal", ["failed", "rejected"])
+@pytest.mark.parametrize("terminal", ["failed", "rejected", "cancelled"])
 async def test_classify_failed_job_skips_results(mcp, pdf, httpx_mock, terminal):
     mock_job(httpx_mock, "/doc-ai/v1/job/classify", statuses=(terminal,))
 
@@ -296,7 +296,7 @@ async def test_split_new_contract_options(mcp, pdf, httpx_mock):
 
     await call(mcp, "sarvam_tools_vision_split", document_path=str(pdf),
                instructions="One invoice per document", page_ranges="1-10",
-               must_keep_together=[{"start": 3, "end": 4}], must_split_before=[5],
+               must_split_before=[5],
                min_segment_confidence=0.7, min_class_confidence=0.8)
 
     config = json.loads(multipart_parts(httpx_mock.get_requests()[0])["request"]["body"])["config"]
@@ -304,7 +304,7 @@ async def test_split_new_contract_options(mcp, pdf, httpx_mock):
         "classify_segments": False,
         "instructions": "One invoice per document",
         "page_ranges": "1-10",
-        "constraints": {"must_keep_together": [{"start": 3, "end": 4}], "must_split_before": [5]},
+        "constraints": {"must_split_before": [5]},
         "review_policy": {"min_segment_confidence": 0.7, "min_class_confidence": 0.8},
     }
 
@@ -321,7 +321,9 @@ async def test_split_with_categories_turns_on_classify_segments(mcp, pdf, httpx_
     assert request["config"]["categories"] == CATEGORIES
 
 
-@pytest.mark.parametrize("removed", ["method", "pages_per_segment", "segment_ranges", "split_on"])
+@pytest.mark.parametrize(
+    "removed", ["method", "pages_per_segment", "segment_ranges", "split_on", "must_keep_together"]
+)
 async def test_split_removed_params_are_rejected(mcp, pdf, removed):
     # Removed from the API contract 2026-11 (the model always finds the boundaries).
     with pytest.raises(ToolError):
@@ -346,6 +348,20 @@ async def test_split_include_details(mcp, pdf, httpx_mock):
 # ---- parse (renamed from digitise) ---------------------------------------
 
 
+PARSE_RESULTS = {
+    "documents": [{
+        "filename": "bundle.pdf",
+        "pages": [{
+            "page_num": 1, "status": "completed",
+            "blocks": [
+                {"text": "Total: 4,500", "reading_order": 2},
+                {"text": "INVOICE", "reading_order": 1},
+            ],
+        }],
+    }],
+}
+
+
 async def test_parse_hits_parse_endpoint_with_form_fields(mcp, pdf, httpx_mock):
     httpx_mock.add_response(method="POST", url=f"{BASE}/doc-ai/v1/job/parse",
                             json={"job_id": JOB})
@@ -353,6 +369,8 @@ async def test_parse_hits_parse_endpoint_with_form_fields(mcp, pdf, httpx_mock):
                             json={"status": "completed"})
     httpx_mock.add_response(method="GET", url=f"{BASE}/doc-ai/v1/job/{JOB}/download-url",
                             json={"download_url": "https://blob/out.zip"})
+    httpx_mock.add_response(method="GET", url=f"{BASE}/doc-ai/v1/job/{JOB}/results",
+                            json=PARSE_RESULTS)
 
     out = await call(mcp, "sarvam_tools_vision_parse", document_path=str(pdf),
                      output_format="html", language="hi-IN", document_content="mixed")
@@ -365,6 +383,61 @@ async def test_parse_hits_parse_endpoint_with_form_fields(mcp, pdf, httpx_mock):
     assert parts["model"]["body"] == b"sarvam-vision-v1"
     assert out["download"] == {"download_url": "https://blob/out.zip"}
     assert out["output_format"] == "html"
+    assert out["pages"] == [
+        {"filename": "bundle.pdf", "page": 1, "status": "completed", "text": "INVOICE\n\nTotal: 4,500"},
+    ]
+
+
+async def test_parse_omits_language_by_default_and_can_skip_text(mcp, pdf, httpx_mock):
+    httpx_mock.add_response(method="POST", url=f"{BASE}/doc-ai/v1/job/parse", json={"job_id": JOB})
+    httpx_mock.add_response(method="GET", url=f"{BASE}/doc-ai/v1/job/{JOB}/status",
+                            json={"status": "completed"})
+    httpx_mock.add_response(method="GET", url=f"{BASE}/doc-ai/v1/job/{JOB}/download-url",
+                            json={"url": "https://blob/out.zip"})
+
+    out = await call(mcp, "sarvam_tools_vision_parse", document_path=str(pdf), include_text=False)
+
+    parts = multipart_parts(httpx_mock.get_requests()[0])
+    assert "language" not in parts  # API default is Indic OCR
+    assert parts["output_format"]["body"] == b"md"
+    assert out["pages"] is None
+    assert not [r for r in httpx_mock.get_requests() if r.url.path.endswith("/results")]
+
+
+# ---- extract --------------------------------------------------------------
+
+
+SCHEMA = {"type": "object", "properties": {"invoice_number": {"type": "string"}}}
+
+
+async def test_extract_csv_returns_fields_annotations_and_file(mcp, pdf, httpx_mock):
+    mock_job(httpx_mock, "/doc-ai/v1/job/extract", results={
+        "result": {"invoice_number": "INV-2041"},
+        "annotations": {"invoice_number": {"confidence": 1, "sources": [{"page_num": 1}]}},
+    })
+    httpx_mock.add_response(method="GET", url=f"{BASE}/doc-ai/v1/job/{JOB}/download-url",
+                            json={"url": "https://blob/out.csv"})
+
+    out = await call(mcp, "sarvam_tools_vision_extract", document_path=str(pdf),
+                     schema=SCHEMA, output_format="csv")
+
+    parts = multipart_parts(httpx_mock.get_requests()[0])
+    assert json.loads(parts["schema"]["body"]) == SCHEMA
+    assert "language" not in parts and "classification" not in parts
+    assert out["result"] == {"invoice_number": "INV-2041"}
+    assert out["annotations"]["invoice_number"]["confidence"] == 1
+    assert out["download"] == {"url": "https://blob/out.csv"}
+
+
+async def test_extract_json_skips_download_url(mcp, pdf, httpx_mock):
+    mock_job(httpx_mock, "/doc-ai/v1/job/extract", results={"result": {}})
+
+    out = await call(mcp, "sarvam_tools_vision_extract", document_path=str(pdf),
+                     schema=SCHEMA, language="en-IN")
+
+    assert multipart_parts(httpx_mock.get_requests()[0])["language"]["body"] == b"en-IN"
+    assert out["download"] is None
+    assert not [r for r in httpx_mock.get_requests() if r.url.path.endswith("/download-url")]
 
 
 async def test_parse_rejects_markdown_alias(mcp, pdf):
