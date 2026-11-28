@@ -33,6 +33,8 @@ SttModel = Literal["saaras:v4", "saaras:v3"]
 _MODE_CAPABLE_MODELS = {"saaras:v4", "saaras:v3"}
 
 SttMode = Literal["transcribe", "translate", "verbatim", "translit", "codemix"]
+# New-style timestamp control (docs: /speech-to-text/How-to/timestamps).
+SttTimestampGranularity = Literal["segment", "word"]
 RealtimeModel = Literal["saaras:v3-realtime", "saaras:v4"]
 StreamType = Literal["fast", "balanced", "simulated"]
 
@@ -95,8 +97,22 @@ def register(mcp: FastMCP) -> None:
             ),
         ),
         with_timestamps: bool = Field(
-            default=False, description="Include chunk-level (sentence/phrase) timestamps — "
-            "word-level timestamps are not supported."
+            default=False,
+            description=(
+                "Include the legacy chunk-level timestamps object (parallel word / "
+                "start_time_seconds / end_time_seconds lists). Superseded by "
+                "`timestamp_granularity` and due to be deprecated."
+            ),
+        ),
+        timestamp_granularity: SttTimestampGranularity | None = Field(
+            default=None,
+            description=(
+                "Timestamp format. 'segment' returns a `segments` list (one entry per "
+                "audio chunk; works on every model and mode). 'word' returns a `words` "
+                "list (one entry per word, null start/end when untimed) and is "
+                "saaras:v4 only, in transcribe / codemix / verbatim / translit — any "
+                "other model or mode returns 400. Case-sensitive."
+            ),
         ),
         model: SttModel = Field(
             default="saaras:v4",
@@ -134,6 +150,8 @@ def register(mcp: FastMCP) -> None:
                     }
                     if model in _MODE_CAPABLE_MODELS:
                         data["mode"] = mode
+                    if timestamp_granularity is not None:
+                        data["timestamp_granularity"] = timestamp_granularity
                     if input_audio_codec is not None:
                         data["input_audio_codec"] = input_audio_codec
                     if keyterms and model == "saaras:v4":
@@ -149,6 +167,8 @@ def register(mcp: FastMCP) -> None:
             "language_probability": payload.get("language_probability"),
             "diarized_transcript": payload.get("diarized_transcript"),
             "timestamps": payload.get("timestamps"),
+            "words": payload.get("words"),
+            "segments": payload.get("segments"),
             "observability": metrics.to_response_block(),
         }
 

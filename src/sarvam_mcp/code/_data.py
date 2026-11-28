@@ -258,7 +258,8 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "model":             "str — saaras:v4 (latest) | saaras:v3",
             "mode":              "str — transcribe (default) | translate | verbatim | translit | codemix (saaras:v3/v4 only)",
             "language_code":     "str — BCP-47 or 'unknown' for auto-detect",
-            "with_timestamps":   "bool",
+            "with_timestamps":   "bool — legacy parallel-list timestamps (being deprecated)",
+            "timestamp_granularity": "str — segment (all models/modes) | word (saaras:v4 only: transcribe/codemix/verbatim/translit)",
             "keyterms":          "JSON list, saaras:v4 only, up to 50 terms of 64 chars",
             "input_audio_codec": "str (optional) — pcm_s16le | pcm_l16 | pcm_raw (required for PCM files, 16kHz only)",
         },
@@ -267,13 +268,18 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
             "language_code":        "str — detected if input was 'unknown'",
             "language_probability": "float — confidence of detected language",
             "diarized_transcript":  "list[turn] | null",
-            "timestamps":           "list[word_ts] | null",
+            "timestamps":           "list[word_ts] | null — legacy, with_timestamps=true",
+            "words":                "list[{text,start,end}] | null — timestamp_granularity=word",
+            "segments":             "list[{text,start,end}] | null — timestamp_granularity=segment",
         },
         "notes": (
             "Saaras v4 is the latest, recommended model (22 Indic languages + Global/Indian English). "
             "It supports 5 output modes via the `mode` parameter, same as v3. "
             "`keyterms` (v4 only): up to 50 domain terms, JSON-encoded array form field, "
             "64 chars max each. Speech-to-English is mode=translate on this endpoint. "
+            "`timestamp_granularity` (segment | word) replaces `with_timestamps`: "
+            "segment returns `segments`, word returns `words` and is saaras:v4 only "
+            "in transcribe/codemix/verbatim/translit. "
             "For >30s audio, use /speech-to-text/job/v1. "
             "Live audio uses GET /speech-to-text-realtime/ws."
         ),
@@ -285,7 +291,8 @@ API_REFERENCE: dict[str, dict[str, Any]] = {
         "request_body": {
             "job_parameters": (
                 "object, required — {model, mode, language_code, with_timestamps, "
-                "with_diarization, num_speakers, input_audio_codec, keyterms}"
+                "timestamp_granularity, with_diarization, num_speakers, "
+                "input_audio_codec, keyterms}"
             ),
             "callback": "object (optional) — {url, auth_token} webhook, notified on completion",
         },
@@ -886,7 +893,7 @@ PRICING: dict[str, dict[str, Any]] = {
     "saaras:v4+diarization": {"unit": "per minute of audio", "rates_inr_by_plan": _per_plan(0.59, 0.54, 0.50),
                              "tier": "batch STT with with_diarization=true"},
     "bulbul:v3":            {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(3.00, 2.85, 2.70),
-                             "tier": "API default model. Bulbul V3 reaches end of life on Voice Agents on 2026-11-25 but stays on the TTS API"},
+                             "tier": "API default model. Bulbul V3 reaches end of life on Voice Agents on 2026-11-30 (extended from 2026-11-25) but stays on the TTS API"},
     "bulbul:v4-flash":      {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(2.00, 1.85, 1.70), "tier": "latest"},
     "instant-voice-cloning": {"unit": "per 1,000 characters", "rates_inr_by_plan": _per_plan(2.00, 2.00, 2.00),
                              "tier": "beta. /voices/watermark/detect is free"},
